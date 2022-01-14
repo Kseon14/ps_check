@@ -89,17 +89,13 @@ class NotificationService {
   }
 
   void cancelAllNotifications() async {
-    await flutterLocalNotificationsPlugin.cancelAll();
+    flutterLocalNotificationsPlugin.cancelAll();
   }
 
   void handleApplicationWasLaunchedFromNotification() async {
     final NotificationAppLaunchDetails? notificationAppLaunchDetails =
     await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
 
-    if (notificationAppLaunchDetails!.didNotificationLaunchApp) {
-      Data userBirthday = getGaFromJson(notificationAppLaunchDetails.payload!);
-      cancelNotificationForBirthday(userBirthday);
-    }
   }
 
   Data getGaFromJson(String payload) {

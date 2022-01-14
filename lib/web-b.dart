@@ -545,6 +545,19 @@ class _InAppWebviewState
             product.isSelected = true;
           }
         }
+        products.sort((a,b) {
+          if (a!.webctas![0].price!.discountedValue == null
+              && b!.webctas![0].price!.discountedValue == null) {
+            return 0;
+          }
+          if (a.webctas![0].price!.discountedValue == null) {
+            return 1;
+          }
+          if (b!.webctas![0].price!.discountedValue == null) {
+            return -1;
+          }
+          return a.webctas![0].price!.discountedValue!
+              .compareTo(b.webctas![0].price!.discountedValue!);});
         showModalSheet(products);
       }
     } else {
@@ -590,6 +603,12 @@ class _InAppWebviewState
             {high = high + 33 * 3}
           else if (pr.name!.length < 90)
             {high = high + 33 * 4}
+          else if (pr.name!.length < 120)
+            {high = high + 30 * 5}
+          else if (pr.name!.length < 150)
+            {high = high + 27 * 6}
+          else if (pr.name!.length < 180)
+            {high = high + 25 * 7}
         });
     return high;
   }
@@ -755,7 +774,7 @@ _prepareAttributesFromProduct(Product product) async {
   return new GameAttributes(
       gameId: product.id!,
       imgUrl:
-          product.media!.firstWhere((m) => m.role == "MASTER").url! + "?w=300",
+          product.media!.firstWhere((m) => m.role == "MASTER").url! + "?w=250",
       type: GameType.PRODUCT,
       url: "https://store.playstation.com/$region/product/" + product.id!);
 }
@@ -772,7 +791,7 @@ _getGameImageUrl(Uri? futureUrl) async {
         .querySelector('img[data-qa="gameBackgroundImage#tileImage#preview"]');
   }
   String imageUrl = imgElement!.attributes['src']!;
-  return imageUrl.substring(0, imageUrl.indexOf("?")) + "?w=300";
+  return imageUrl.substring(0, imageUrl.indexOf("?")) + "?w=250";
 }
 
 _getGameId(Uri? url) async {
