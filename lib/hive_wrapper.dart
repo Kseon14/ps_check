@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:collection/src/iterable_extensions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -121,7 +122,11 @@ class HiveWrapper{
   }
 
   close() async{
-    await box?.close();
+    try {
+      await box?.close();
+    } on FileSystemException {
+      debugPrint("error");
+    }
     print("box is closed");
     box = null;
   }

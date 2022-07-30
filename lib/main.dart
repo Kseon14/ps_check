@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_app_badger/flutter_app_badger.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:glass_kit/glass_kit.dart';
 import 'package:http/http.dart' as http;
 import 'package:ps_check/ga.dart';
 import 'package:ps_check/model.dart';
@@ -17,7 +18,7 @@ import 'package:ps_check/notification_service.dart';
 import 'package:ps_check/spw.dart';
 import 'package:ps_check/theme.dart';
 import 'package:ps_check/web-b.dart';
-import 'package:toggle_switch/toggle_switch.dart';
+import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import 'package:workmanager/workmanager.dart';
 
@@ -38,11 +39,15 @@ var host = "https://web.np.playstation.com";
 
 GlobalKey settingKey = GlobalKey();
 GlobalKey addKey = GlobalKey();
+GlobalKey addKey2 = GlobalKey();
 GlobalKey listViewKey = GlobalKey();
+
+final GlobalKey<AnimatedListState> _listKey = GlobalKey();
+
 final GlobalKey<AnimatedListState> listKey = GlobalKey();
 
 Future<List<Data?>> fetchDataV2(bool fromNotification) async {
-  print("fetching data....");
+  debugPrint("fetching data....");
   List<GameAttributes> gameAttributes = await hiveWrapper.readFromDb();
   List<Data?> dates = [];
   Map<String, String> headers = {
@@ -79,23 +84,28 @@ Future<List<Data?>> fetchDataV2(bool fromNotification) async {
       return Future.value(data);
     }));
 
-    print("GameAttributesOB: $gameAttributes");
-    print("data: $dates");
+    debugPrint("GameAttributesOB: $gameAttributes");
+    debugPrint("data: $dates");
   }
-  dates.where((data) => data != null).toList();
-  dates.sort((a,b) {
-     if (a!.productRetrieve!.webctas![0].price!.discountedValue == null
-     && b!.productRetrieve!.webctas![0].price!.discountedValue == null) {
-       return 0;
-     }
-     if (a.productRetrieve!.webctas![0].price!.discountedValue == null) {
-       return 1;
-     }
-     if (b!.productRetrieve!.webctas![0].price!.discountedValue == null) {
-       return -1;
-     }
-       return a.productRetrieve!.webctas![0].price!.discountedValue!
-      .compareTo(b.productRetrieve!.webctas![0].price!.discountedValue!);});
+  dates = dates.where((data) => data != null).toList();
+  dates.sort((a, b) {
+    if (a!.productRetrieve!.webctas!.isEmpty  ||
+        b!.productRetrieve!.webctas!.isEmpty) {
+      return 0;
+    }
+    if (a.productRetrieve!.webctas![0].price!.discountedValue == null &&
+        b!.productRetrieve!.webctas![0].price!.discountedValue == null) {
+      return 0;
+    }
+    if (a.productRetrieve!.webctas![0].price!.discountedValue == null) {
+      return 1;
+    }
+    if (b!.productRetrieve!.webctas![0].price!.discountedValue == null) {
+      return -1;
+    }
+    return a.productRetrieve!.webctas![0].price!.discountedValue!
+        .compareTo(b.productRetrieve!.webctas![0].price!.discountedValue!);
+  });
   return dates;
 }
 
@@ -103,6 +113,9 @@ Future<List<Data?>> fetchDataV2(bool fromNotification) async {
 // a=null b=2 ->1
 
 _isDiscountExist(ProductRetrieve productRetrieve) {
+  if(productRetrieve.webctas!.isEmpty) {
+    return false;
+  }
   if (productRetrieve.webctas![0].price!.discountedValue == null) {
     return false;
   }
@@ -115,10 +128,13 @@ _isDiscountExist(ProductRetrieve productRetrieve) {
 // ga = 100 discount = 200
 isPriceLessThenSaved(Data data, GameAttributes gameAttributes) async {
   if (gameAttributes.discountedValue == null) {
+    if (data.productRetrieve!.webctas!.isEmpty){
+      return false;
+    }
     gameAttributes.discountedValue =
         data.productRetrieve!.webctas![0].price!.discountedValue;
-    print("gameAttributes.discountedValue is null");
-    print(
+    debugPrint("gameAttributes.discountedValue is null");
+    debugPrint(
         "gameAttributes.discountedValue now ${gameAttributes.discountedValue}");
     await hiveWrapper.save(gameAttributes);
     return false;
@@ -130,11 +146,11 @@ isPriceLessThenSaved(Data data, GameAttributes gameAttributes) async {
       gameAttributes.discountedValue!) {
     gameAttributes.discountedValue =
         data.productRetrieve!.webctas![0].price!.discountedValue;
-    print("gameAttributes.discountedValue less then in data");
-    print(
+    debugPrint("gameAttributes.discountedValue less then in data");
+    debugPrint(
         "${data.productRetrieve!.webctas![0].price!.discountedValue} more then"
         "${gameAttributes.discountedValue}");
-    print("gameAttributes.discountedValue less then in data");
+    debugPrint("gameAttributes.discountedValue less then in data");
     await hiveWrapper.save(gameAttributes);
     return false;
   }
@@ -142,8 +158,8 @@ isPriceLessThenSaved(Data data, GameAttributes gameAttributes) async {
       gameAttributes.discountedValue!) {
     gameAttributes.discountedValue =
         data.productRetrieve!.webctas![0].price!.discountedValue;
-    print("gameAttributes.discountedValue more then in data");
-    print(
+    debugPrint("gameAttributes.discountedValue more then in data");
+    debugPrint(
         "${data.productRetrieve!.webctas![0].price!.discountedValue} less then"
         "${gameAttributes.discountedValue}");
     await hiveWrapper.save(gameAttributes);
@@ -187,9 +203,8 @@ Game? convertToGame(GameAttributes gameAttribute) {
 }
 
 void main() async {
-
   WidgetsFlutterBinding.ensureInitialized();
-  print("init");
+  debugPrint("init");
   await hiveWrapper.init();
   //ns = new NotificationService();
 
@@ -237,8 +252,8 @@ void callbackDispatcher() {
     for (final data in datas) {
       GameAttributes? gm = gameAttributes
           .firstWhereOrNull((i) => i.gameId == data!.productRetrieve?.id);
-      print("data :$data");
-      print("gm :$gm");
+      debugPrint("data :$data");
+      debugPrint("gm :$gm");
       //  print("less or not"+ isPriceLessThenSaved(data, gm));
       // if (_isPriceLessThenSaved(data, gm)) {
       if (gm!.discountedValue == null) {
@@ -246,8 +261,8 @@ void callbackDispatcher() {
             data!.productRetrieve?.webctas?[0].price?.discountedValue;
         await hiveWrapper.save(gm);
         //hiveWrapper.put(gm);
-        print("gameAttributes.discountedValue is null");
-        print("gameAttributes.discountedValue now ${gm.discountedValue}");
+        debugPrint("gameAttributes.discountedValue is null");
+        debugPrint("gameAttributes.discountedValue now ${gm.discountedValue}");
       }
       if (data!.productRetrieve?.webctas![0].price!.discountedValue == null) {
         continue;
@@ -257,8 +272,8 @@ void callbackDispatcher() {
         gm.discountedValue =
             data.productRetrieve!.webctas![0].price!.discountedValue;
         await hiveWrapper.save(gm);
-        print("gameAttributes.discountedValue less then in data");
-        print(
+        debugPrint("gameAttributes.discountedValue less then in data");
+        debugPrint(
             "${data.productRetrieve!.webctas![0].price!.discountedValue} more then"
             "${gm.discountedValue}");
       }
@@ -268,8 +283,8 @@ void callbackDispatcher() {
             data.productRetrieve!.webctas![0].price!.discountedValue;
         await hiveWrapper.save(gm);
         //hiveWrapper.put(gm);
-        print("gameAttributes.discountedValue more then in data");
-        print(
+        debugPrint("gameAttributes.discountedValue more then in data");
+        debugPrint(
             "${data.productRetrieve!.webctas![0].price!.discountedValue} less then"
             "${gm.discountedValue}");
         NotificationService().showNotification(data);
@@ -305,9 +320,8 @@ void callbackDispatcher() {
   });
 }
 
-
 class GameChecker extends StatefulWidget {
-  const GameChecker({ Key? key}) : super(key: key);
+  const GameChecker({Key? key}) : super(key: key);
 
   @override
   _GameCheckerState createState() => _GameCheckerState();
@@ -315,13 +329,15 @@ class GameChecker extends StatefulWidget {
 
 class _GameCheckerState extends State<GameChecker> {
   @override
-  void initState(){
+  void initState() {
     super.initState();
     theme.addListener(() {
       refresh();
     });
   }
+
   refresh() {
+    //await Future.delayed(Duration(seconds: 2));
     setState(() {});
   }
 
@@ -343,55 +359,57 @@ class _GameCheckerState extends State<GameChecker> {
           //Brightness.dark, //navigation bar icon
           ));
     }
-     return
-      MaterialApp(
+    return MaterialApp(
       //theme: new ThemeData(scaffoldBackgroundColor: Colors.white),
       initialRoute: '/',
       routes: {
-        '/': (context) => GameCheckerMain(show: sharedPropWrapper.readTutorialFlagMain(),
-            notifyParent: refresh ),
+        '/': (context) => GameCheckerMain(
+            show: sharedPropWrapper.readTutorialFlagMain(),
+            notifyParent: refresh),
         // '/settings': (context) => Settings(),
         '/webView': (context) => InAppWebview(),
       },
       theme: ThemeData(
-        brightness: Brightness.light,
+          brightness: Brightness.light,
           primaryColor: Colors.white,
           backgroundColor: Colors.white
 
-        /* light theme settings */
-      ),
+          /* light theme settings */
+          ),
       darkTheme: ThemeData(
-        brightness: Brightness.dark,
+          brightness: Brightness.dark,
           primaryColor: Colors.black45,
           backgroundColor: Colors.black54
-        /* dark theme settings */
-      ),
+          /* dark theme settings */
+          ),
       themeMode: ThemeMode.light,
     );
   }
 
-  // @override
-  // void dispose() async {
-  //   WidgetsBinding.instance!.removeObserver(this);
-  //   await hiveWrapper.close();
-  //   super.dispose();
-  // }
-  //
-  // @override
-  // void initState() {
-  //   super.initState();
-  //   WidgetsBinding.instance!.addObserver(this);
-  //   print("init State");
-  //   //NotificationService().cancelAllNotifications();
-  // }
-
+// @override
+// void dispose() async {
+//   WidgetsBinding.instance!.removeObserver(this);
+//   await hiveWrapper.close();
+//   super.dispose();
+// }
+//
+// @override
+// void initState() {
+//   super.initState();
+//   WidgetsBinding.instance!.addObserver(this);
+//   print("init State");
+//   //NotificationService().cancelAllNotifications();
+// }
 
 }
 
 class GameCheckerMain extends StatefulWidget {
   final Function() notifyParent;
-  GameCheckerMain({ Key? key, required this.show, required this.notifyParent}) : super(key: key);
+
+  GameCheckerMain({Key? key, required this.show, required this.notifyParent})
+      : super(key: key);
   Future<dynamic> show;
+
   @override
   _GameCheckerMainState createState() => _GameCheckerMainState();
 }
@@ -400,10 +418,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
     with
         //AutomaticKeepAliveClientMixin<GameCheckerMain>,
         WidgetsBindingObserver {
-
   List<String>? gameIds;
-  var refreshKey = GlobalKey<RefreshIndicatorState>();
-
   String selectedRegion = "";
   FixedExtentScrollController? firstController;
   int? index;
@@ -412,9 +427,9 @@ class _GameCheckerMainState extends State<GameCheckerMain>
 
   _startTutorial(Future<dynamic> show) async {
     // if (!await sharedPropWrapper.readTutorialFlagMain()) {
-    if (! await show) {
+    if (!await show) {
       initTarget();
-      WidgetsBinding.instance?.addPostFrameCallback(_layout);
+      WidgetsBinding.instance.addPostFrameCallback(_layout);
       // Future.delayed(Duration(milliseconds: 100));
       // print("tutorial");
       // showTutorial(context);
@@ -423,7 +438,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
 
   void _layout(_) async {
     Future.delayed(Duration(milliseconds: 100));
-    print("tutorial");
+    debugPrint("tutorial");
     showTutorial();
   }
 
@@ -437,16 +452,16 @@ class _GameCheckerMainState extends State<GameCheckerMain>
       opacityShadow: 0.8,
       onFinish: () {
         sharedPropWrapper.saveTutorialFlagMain(true);
-        print("finish");
+        debugPrint("finish");
       },
       onClickTarget: (target) {
-        print('onClickTarget: $target');
+        debugPrint('onClickTarget: $target');
       },
       onSkip: () {
-        print("skip");
+        debugPrint("skip");
       },
       onClickOverlay: (target) {
-        print('onClickOverlay: $target');
+        debugPrint('onClickOverlay: $target');
       },
     )..show();
   }
@@ -469,7 +484,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                   Text(
                     "Select your region",
                     style: TextStyle(
-                      //fontWeight: FontWeight.bold,
+                        //fontWeight: FontWeight.bold,
                         color: Colors.white,
                         fontSize: 20.0),
                   ),
@@ -478,7 +493,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                     height: 300.0,
                     child: Text(
                       "Base on this selection ps store will show regional site, "
-                          "games and price",
+                      "games and price",
                       style: TextStyle(color: Colors.white, fontSize: 15.0),
                     ),
                   )
@@ -511,7 +526,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                         child: Text(
                           "Click here to start game selection",
                           style: TextStyle(
-                            //fontWeight: FontWeight.bold,
+                              //fontWeight: FontWeight.bold,
                               color: Colors.white,
                               fontSize: 20.0),
                         )),
@@ -523,10 +538,9 @@ class _GameCheckerMainState extends State<GameCheckerMain>
     );
   }
 
-
   @override
   void dispose() async {
-    WidgetsBinding.instance!.removeObserver(this);
+    WidgetsBinding.instance.removeObserver(this);
     await hiveWrapper.close();
     super.dispose();
   }
@@ -535,20 +549,20 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     switch (state) {
       case AppLifecycleState.resumed:
-      // force a close and start from fresh. Just incase
-      // a box wasn't closed on inactive/paused
+        // force a close and start from fresh. Just incase
+        // a box wasn't closed on inactive/paused
         NotificationService().cancelAllNotifications();
         FlutterAppBadger.updateBadgeCount(0);
         await hiveWrapper.close();
         await hiveWrapper.init();
-        print("state: resumed");
+        debugPrint("state: resumed");
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
-        print("state: paused");
+        debugPrint("state: paused");
         break;
       default:
-        print("state: default");
+        debugPrint("state: default");
         break;
     }
   }
@@ -556,16 +570,16 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance!.addObserver(this);
+    WidgetsBinding.instance.addObserver(this);
     //NotificationService().cancelAllNotifications();
     firstController = FixedExtentScrollController(initialItem: 0);
     _startTutorial(widget.show);
-    print("init State");
+    debugPrint("init State");
   }
 
   Future<Null> _refreshList() async {
-    refreshKey.currentState?.show(atTop: false);
-    await Future.delayed(Duration(seconds: 2));
+    //refreshKey.currentState?.show(atTop: false);
+    //await Future.delayed(Duration(seconds: 2));
     //TODO
     // setState(() {
     //  // fetchDataV2(false);
@@ -574,7 +588,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
     return null;
   }
 
-  _refreshListButton() async {
+  refreshListButton() async {
     _refreshList();
   }
 
@@ -588,7 +602,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
       index = _getIndex(regionName);
       return regionName;
     } else {
-      print('default :$selectedRegion');
+      debugPrint('default :$selectedRegion');
       index = 0;
       return getLocations()[0].name;
     }
@@ -599,14 +613,16 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   }
 
   _showPicker() async {
-    print("picker");
+    debugPrint("picker");
     showModalBottomSheet(
+        backgroundColor: Colors.white.withOpacity(0.5),
         context: context,
         builder: (BuildContext context) {
           return Container(
               height: 200,
               child: CupertinoPicker(
-                  backgroundColor: Theme.of(context).primaryColor,
+                  //backgroundColor: Colors.transparent,
+                  //backgroundColor: Theme.of(context).primaryColor,
                   magnification: 1.2,
                   onSelectedItemChanged: (index) {
                     this.index = index;
@@ -615,7 +631,10 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                   scrollController:
                       FixedExtentScrollController(initialItem: index!),
                   children: getLocations()
-                      .map((region) => new Text(region.name))
+                      .map((region) => new Text(
+                            region.name,
+                            style: TextStyle(color: Colors.white),
+                          ))
                       .toList()));
         }).then((value) {
       if (selectedRegion != getLocations()[index!].name) {
@@ -632,414 +651,456 @@ class _GameCheckerMainState extends State<GameCheckerMain>
 
   _showModalSheet() {
     showModalBottomSheet(
-        backgroundColor: Theme.of(context).backgroundColor,
-        context: context,
-        builder: (builder) {
-          return FutureBuilder(
-              future: getLocationName(),
-              builder: (context, snapshot) {
-                if (snapshot.hasData) {
-                  print(snapshot.data);
-                  return new Container(
-                    height: 250,
-                    color: Theme.of(context).primaryColor,
-                    child: Container(
-                      padding: EdgeInsets.all(10),
-                      //margin: EdgeInsets.fromLTRB(10, 10, 10, 10),
-                      child: Column(
-                        children: [
-                   //        Row(
-                   //          //mainAxisAlignment: MainAxisAlignment.center,
-                   //          children: [
-                   //
-                   // Container(
-                   //        width: 25,
-                   //        alignment: Alignment.centerLeft,
-                   //
-                   //            child:
-                   //            Icon(Icons.panorama, color: Colors.black)
-                   //      ),
-                   //            SizedBox(
-                   //              width: 6,
-                   //            ),
-                   //  Expanded(
-                   //      flex: 2,
-                   //    child:
-                   //    Container(
-                   //            child:
-                   //            Text(
-                   //              "Theme",
-                   //              style: TextStyle(fontSize: 17),
-                   //            ))),
-                   //    Container(
-                   //        alignment: Alignment.centerRight,
-                   //      child:
-                   //            ToggleSwitch(
-                   //              minWidth: 60.0,
-                   //              minHeight: 30,
-                   //              cornerRadius: 10.0,
-                   //              activeBgColors: [
-                   //                [Colors.black54],
-                   //                [Colors.black54]
-                   //              ],
-                   //              activeFgColor: Colors.white,
-                   //              inactiveBgColor: Colors.black12,
-                   //              inactiveFgColor: Colors.black,
-                   //              initialLabelIndex: 1,
-                   //              totalSwitches: 2,
-                   //              labels: ['Light', 'Dark'],
-                   //              radiusStyle: true,
-                   //              onToggle: (index) {
-                   //                print('switched to: $index');
-                   //                theme.switchTheme();
-                   //              },
-                   //            ),
-                   //        )]),
-                   //        SizedBox(
-                   //          height: 6,
-                   //        ),
-
-                          GestureDetector(
-                              onTap: () => _showPicker(),
-                              child: Row(
-                                  mainAxisAlignment:
-                                  MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Icon(Icons.language, color: Colors.black),
-                                    SizedBox(
-                                      width: 6,
-                                    ),
-                                    Text(
-                                      "Region",
-                                      style: TextStyle(fontSize: 17),
-                                    ),
-                                    //Spacer(),
-                                    Container(
-                                        child: Flexible(
-                                            flex: 7,
-                                            child: Column(
-                                                crossAxisAlignment:
-                                                CrossAxisAlignment.end,
-                                                children: [
-                                                  Container(
-                                                    alignment:
-                                                    Alignment.centerRight,
-                                                    child: Text(
-                                                      snapshot.data.toString(),
-                                                      style: TextStyle(
-                                                          fontSize: 17),
-                                                      textAlign: TextAlign.end,
-                                                    ),
-                                                  )
-                                                ]))),
-                                  ])),
-                        ],
+      context: context,
+      backgroundColor: Colors.transparent,
+      barrierColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          child: ClipRRect(
+            borderRadius: BorderRadius.all(Radius.circular(20)),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(
+                sigmaX: 25.0,
+                sigmaY: 25.0,
+              ),
+              child: Container(
+                height: 250,
+                child: Column(
+                  children: [
+                    Center(
+                      child: FractionallySizedBox(
+                        widthFactor: 0.25,
+                        child: Container(
+                          margin: const EdgeInsets.symmetric(
+                            vertical: 4,
+                          ),
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(2),
+                            border: Border.all(
+                              color: Colors.black12,
+                              width: 0.5,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  );
-                } else {
-                  return Center(child: CircularProgressIndicator());
-                }
-              });
-        });
+                    FutureBuilder(
+                        future: getLocationName(),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            print(snapshot.data);
+                            return new Container(
+                              padding: EdgeInsets.all(10),
+                              //margin: EdgeInsets.fromLTRB(10, 10, 10, 10),
+                              child: Column(
+                                children: [
+                                  GestureDetector(
+                                      onTap: () => _showPicker(),
+                                      child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Icon(Icons.language,
+                                                color: Colors.black),
+                                            SizedBox(
+                                              width: 6,
+                                            ),
+                                            Text(
+                                              "Region",
+                                              style: TextStyle(fontSize: 17),
+                                            ),
+                                            //Spacer(),
+                                            Container(
+                                                child: Flexible(
+                                                    flex: 7,
+                                                    child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .end,
+                                                        children: [
+                                                          Container(
+                                                            alignment: Alignment
+                                                                .centerRight,
+                                                            child: Text(
+                                                              snapshot.data
+                                                                  .toString(),
+                                                              style: TextStyle(
+                                                                  fontSize: 17),
+                                                              textAlign:
+                                                                  TextAlign.end,
+                                                            ),
+                                                          )
+                                                        ]))),
+                                          ])),
+                                ],
+                              ),
+                            );
+                          } else {
+                            return Center(child: CircularProgressIndicator());
+                          }
+                        }),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    print("_GameCheckerMainState");
+    debugPrint("_GameCheckerMainState");
     return Scaffold(
+        extendBodyBehindAppBar: true,
         backgroundColor: Theme.of(context).primaryColor,
-        appBar: AppBar(
-            //brightness: Brightness.light,
-            toolbarHeight: 44,
-            backgroundColor: Theme.of(context).primaryColor,
-            elevation: 0,
-            leading: GestureDetector(
-              key: settingKey,
-              onTap: () {
-                // Navigator.of(context).pushNamed('/settings');
-                // Navigator.push(context, PageTransition(type: PageTransitionType.bottomToTop, child: Settings()));
-                _showModalSheet();
-              },
-              child: Icon(Icons.settings,
-                  color: Colors.blue // add custom icons also
-                  ),
-            ),
-            actions: <Widget>[
-              Padding(
-                  padding: EdgeInsets.only(right: 20.0),
-                  child: GestureDetector(
-                    key: addKey,
-                    onTap: () async {
-                      // GameAttributes gameAttribute =
-                      //(await
-                      await Navigator.of(context).pushNamed('/webView');
-                      // )
-                      // as GameAttributes;
-                      // if (gameAttribute != null) {
-                      //   hiveWrapper.put(gameAttribute);
-                      // }
-                      //TODO
-                      // setState(() {
-                      //   //should refresh the state
-                      // });
-                      widget.notifyParent();
-                    },
-                    child: Icon(Icons.add, size: 30.0, color: Colors.blue),
-                  ))
-            ]),
-        body: FutureBuilder<List<Data?>>(
-            future: fetchDataV2(false),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) print(snapshot.error);
-              if (snapshot.connectionState == ConnectionState.done) {
-                if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                  print('show list');
-                  return RefreshIndicator(
-                      key: refreshKey,
-                      child: GamesList(data: snapshot.data ?? []),
-                      onRefresh: () {
-                        return _refreshList();
-                      });
-                } else {
-                  print('show empty list');
-                  return Center(
-                      child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: <Widget>[
-                        Text("no any games in list"),
-                        IconButton(
-                          iconSize: 27,
-                          splashColor: Colors.green,
-                          icon: const Icon(Icons.refresh),
-                          //tooltip: 'Increase volume by 10',
-                          onPressed: () {
-                            _refreshListButton();
-                          },
-                        )
-                      ]));
-                }
-              } else {
-                return Center(child: CircularProgressIndicator());
-              }
-            }));
+        // body: Stack(
+        //     children: [
+        //
+        //
+        //     Positioned(
+        //         child:
+        //         Container(
+        //             padding: const EdgeInsets.fromLTRB(0,100,0,0),
+        //             child:
+        //     FutureBuilder<List<Data?>>(
+        //         future: fetchDataV2(false),
+        //         builder: (context, snapshot) {
+        //           if (snapshot.hasError) print(snapshot.error);
+        //           if (snapshot.connectionState == ConnectionState.done) {
+        //             if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+        //               debugPrint('show list');
+        //               return
+        //                 // RefreshIndicator(
+        //                 //   key: refreshKey,
+        //                 //   displacement: 100,
+        //                 //   edgeOffset: 0,
+        //                 //   backgroundColor: Colors.white,
+        //                 //   color: Colors.blue,
+        //
+        //                 GamesList(data: snapshot.data ?? [],
+        //                   notifyParent: widget.notifyParent,
+        //                   refreshList: refreshListButton,);
+        //               // onRefresh: () {
+        //               //   return _refreshList();
+        //               // };
+        //             } else {
+        //               debugPrint('show empty list');
+        //               return Center(
+        //                   child: Column(
+        //                       mainAxisSize: MainAxisSize.min,
+        //                       crossAxisAlignment: CrossAxisAlignment.center,
+        //                       children: <Widget>[
+        //                         IconButton(
+        //                           key: addKey2,
+        //                           iconSize: 31,
+        //                           splashColor: Colors.green,
+        //                           icon: const Icon(Icons.add),
+        //                           color: Colors.green,
+        //                           //tooltip: 'Increase volume by 10',
+        //                           onPressed: () async {
+        //                             await Navigator.of(context).pushNamed('/webView');
+        //                             widget.notifyParent();
+        //                           },
+        //                         ),
+        //                         IconButton(
+        //                           iconSize: 31,
+        //                           splashColor: Colors.green,
+        //                           icon: const Icon(Icons.refresh),
+        //                           //tooltip: 'Increase volume by 10',
+        //                           onPressed: () {
+        //                             refreshListButton();
+        //                           },
+        //                         )
+        //                       ]));
+        //             }
+        //           }
+        //           else {
+        //             return Center(child: CircularProgressIndicator());
+        //           }
+        //         }
+        //     ))),
+        //       Positioned(child:
+        // Container(
+        // child:
+        //               ClipRRect(
+        //                   borderRadius: BorderRadius.all(Radius.circular(0)),
+        //                   child: BackdropFilter(
+        //                       filter: ImageFilter.blur(
+        //                         sigmaX: 25.0,
+        //                         sigmaY: 25.0,
+        //                       ),
+        //                       child:
+        //                       Container(
+        //                         width: double.infinity,
+        //                         height: 100,
+        //                         color: Colors.transparent,
+        //                       )))
+        //             )),
+        //     ]));
+        appBar: PreferredSize(
+            // child: ClipRRect(
+            child: GlassContainer.clearGlass(
+                height: double.infinity,
+                width: double.infinity,
+                blur: 20.0,
+                borderWidth: 0,
+                elevation: 1,
+                //shadowColor: Colors.black.withOpacity(0.20),
+                //alignment: Alignment.center,
+                child: AppBar(
+                    //brightness: Brightness.light,
+                    toolbarHeight: 44,
+                    backgroundColor: Colors.white.withOpacity(0.2),
+                    elevation: 0,
+                    leading: GestureDetector(
+                      key: settingKey,
+                      onTap: () {
+                        // Navigator.of(context).pushNamed('/settings');
+                        // Navigator.push(context, PageTransition(type: PageTransitionType.bottomToTop, child: Settings()));
+                        _showModalSheet();
+                      },
+                      child: Icon(Icons.settings,
+                          color: Color.fromARGB(
+                              255, 0, 114, 206) // add custom icons also
+                          ),
+                    ),
+                    actions: <Widget>[
+                      Padding(
+                          padding: EdgeInsets.only(right: 20.0),
+                          child: GestureDetector(
+                            key: addKey,
+                            onTap: () async {
+                              // GameAttributes gameAttribute =
+                              //(await
+                              await Navigator.of(context).pushNamed('/webView');
+                              // )
+                              // as GameAttributes;
+                              // if (gameAttribute != null) {
+                              //   hiveWrapper.put(gameAttribute);
+                              // }
+                              //TODO
+                              // setState(() {
+                              //   //should refresh the state
+                              // });
+                              widget.notifyParent();
+                            },
+                            child: Icon(Icons.add,
+                                size: 30.0,
+                                color: Color.fromARGB(255, 0, 114, 206)),
+                          ))
+                    ])
+                //)
+                ),
+            preferredSize: Size(
+              double.infinity,
+              44.0,
+            )),
+        body: Container(
+            margin: const EdgeInsets.only(top: 90.0),
+            child: FutureBuilder<List<Data?>>(
+                future: fetchDataV2(false),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) print(snapshot.error);
+                  if (snapshot.connectionState == ConnectionState.done) {
+                    if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                      debugPrint('show list');
+                      return
+                          // RefreshIndicator(
+                          //   key: refreshKey,
+                          //   displacement: 100,
+                          //   edgeOffset: 0,
+                          //   backgroundColor: Colors.white,
+                          //   color: Colors.blue,
+
+                          GamesList(
+                        data: snapshot.data ?? [],
+                        notifyParent: widget.notifyParent,
+                        refreshList: refreshListButton,
+                      );
+                      // onRefresh: () {
+                      //   return _refreshList();
+                      // };
+                    } else {
+                      debugPrint('show empty list');
+                      return Center(
+                          child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: <Widget>[
+                            IconButton(
+                              key: addKey2,
+                              iconSize: 31,
+                              splashColor: Colors.green,
+                              icon: const Icon(Icons.add),
+                              color: Colors.green,
+                              //tooltip: 'Increase volume by 10',
+                              onPressed: () async {
+                                await Navigator.of(context)
+                                    .pushNamed('/webView');
+                                widget.notifyParent();
+                              },
+                            ),
+                            IconButton(
+                              iconSize: 31,
+                              splashColor: Colors.green,
+                              icon: const Icon(Icons.refresh),
+                              //tooltip: 'Increase volume by 10',
+                              onPressed: () {
+                                refreshListButton();
+                              },
+                            )
+                          ]));
+                    }
+                  } else {
+                    return GamesList(
+                      data: snapshot.data ?? [],
+                      notifyParent: widget.notifyParent,
+                      refreshList: refreshListButton,
+                    );
+                    //return Center(child: CircularProgressIndicator());
+                  }
+                })));
   }
 }
 
 //List of items
 class GamesList extends StatefulWidget {
   final List<Data?> data;
+  final Function() notifyParent;
+  final Function() refreshList;
 
-  GamesList({Key? key, required this.data}) : super(key: key);
+  GamesList(
+      {Key? key,
+      required this.data,
+      required this.notifyParent,
+      required this.refreshList})
+      : super(key: key);
 
   @override
   _GamesListState createState() => _GamesListState();
 }
 
-class _GamesListState extends State<GamesList>
-   // with AutomaticKeepAliveClientMixin<GamesList>
+class _GamesListState
+    extends State<GamesList> // with AutomaticKeepAliveClientMixin<GamesList>
 {
+  GlobalKey refreshKey = GlobalKey();
+  RefreshController refreshController =
+      RefreshController(initialRefresh: false);
+
+  @override
+  void dispose() async {
+    refreshController.dispose();
+  super.dispose();
+}
   // @override
   // bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
-    print("list builder");
-    return ListView.builder(
-        cacheExtent: cacheExtentSize,
-        //padding: const EdgeInsets.all(1.0),
-        physics: const AlwaysScrollableScrollPhysics(),
-        itemExtent: imageHeight,
-        itemCount: widget.data.length,
-        itemBuilder: (BuildContext context, int index) {
-          return Slidable(
-            key: UniqueKey(), // A key is necessary.
-            endActionPane: ActionPane(
-              motion: const StretchMotion(),
-              extentRatio: 0.25,
-              dismissible: DismissiblePane(
-                onDismissed: () {
-                  setState(() {
-                    hiveWrapper
-                        .removeFromDb(widget.data[index]!.productRetrieve!.id!);
-                    widget.data.removeAt(index);
-                  });
-                },
-              ),
-              children: [
-                SlidableAction(
-                  label: 'Delete',
-                  backgroundColor: Colors.red,
-                  icon: Icons.delete,
-                  onPressed: (context) {
-                    setState(() {
-                      hiveWrapper
-                          .removeFromDb(widget.data[index]!.productRetrieve!.id!);
-                      widget.data.removeAt(index);
-                    });
-                  },
-                ),
-              ],
+    debugPrint("list builder");
+    if (widget.data.length == 0) {
+      return Center(
+          child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: <Widget>[
+            IconButton(
+              key: addKey2,
+              iconSize: 31,
+              splashColor: Colors.black26,
+              icon: const Icon(Icons.add),
+              color: Color(0x0000ffff),
+              //tooltip: 'Increase volume by 10',
+              onPressed: () async {
+                await Navigator.of(context).pushNamed('/webView');
+                widget.notifyParent();
+              },
             ),
-            child: GestureDetector(
-                onTap: () => _launchURL(context, widget.data[index]!.url),
-                child: GameRowItem(data: widget.data[index]!)),
-          );
-          // return Slidable(
-          //   key: UniqueKey(),
-          //   actionPane: SlidableDrawerActionPane(),
-          //   actionExtentRatio: 0.25,
-          //   dismissal: SlidableDismissal(
-          //     child: SlidableDrawerDismissal(),
-          //     onDismissed: (actionType) {
-          //       hiveWrapper
-          //           .removeFromDb(widget.data[index]!.productRetrieve!.id!);
-          //       widget.data.removeAt(index);
-          //       setState(() {
-          //       });
-          //     },
-          //   ),
-          //   child: GestureDetector(
-          //     onTap: () => _launchURL(context, widget.data[index]!.url),
-          //     child: ,
-          //   ),
-          //   secondaryActions: <Widget>[
-          //     IconSlideAction(
-          //         caption: 'Delete',
-          //         color: Colors.red,
-          //         icon: Icons.delete,
-          //         onTap: () {
-          //            hiveWrapper.removeFromDb(widget.data[index]!.productRetrieve!.id!);
-          //       widget.data.removeAt(index);
-          //               setState(() {
-          //               });
-          //             }),
-          //   ],
-          // );
-        });
+            IconButton(
+              iconSize: 31,
+              splashColor: Colors.green,
+              icon: const Icon(Icons.refresh),
+              //tooltip: 'Increase volume by 10',
+              onPressed: () {
+                widget.refreshList();
+              },
+            )
+          ]));
+    }
+    return SmartRefresher(
+        key: refreshKey,
+        enablePullDown: true,
+        // data.length != 0,
+        //enablePullUp: true,
+        header: ClassicHeader(),
+        //footer: ClassicFooter(),
+        controller: refreshController,
+        onRefresh: () async {
+          print("onRefresh");
+          // monitor network fetch
+          //await Future.delayed(Duration(milliseconds: 1000));
+          // if failed,use refreshFailed()
+          widget.notifyParent();
+          //refreshListButton();
+          refreshController.refreshCompleted();
+        },
+        // onLoading: () async {
+        //   print("onload");
+        //   // monitor network fetch
+        //   //await Future.delayed(Duration(milliseconds: 1000));
+        //   // if failed,use loadFailed(),if no data return,use LoadNodata()
+        //   //items.add((items.length+1).toString());
+        //   widget.notifyParent();
+        //   refreshController.loadComplete();
+        // },
+        physics: BouncingScrollPhysics(),
+        child: ListView.builder(
+            cacheExtent: cacheExtentSize,
+            //padding: const EdgeInsets.all(1.0),
+            physics: const AlwaysScrollableScrollPhysics(),
+            itemExtent: imageHeight,
+            itemCount: widget.data.length,
+            itemBuilder: (BuildContext context, int index) {
+              return Slidable(
+                key: UniqueKey(), // A key is necessary.
+                endActionPane: ActionPane(
+                  motion: const StretchMotion(),
+                  extentRatio: 0.25,
+                  dismissible: DismissiblePane(
+                    onDismissed: () {
+                      setState(() {
+                        hiveWrapper.removeFromDb(
+                            widget.data[index]!.productRetrieve!.id!);
+                        widget.data.removeAt(index);
+                      });
+                    },
+                  ),
+                  children: [
+                    SlidableAction(
+                      label: 'Delete',
+                      backgroundColor: Colors.red,
+                      icon: Icons.delete,
+                      onPressed: (context) {
+                        setState(() {
+                          hiveWrapper.removeFromDb(
+                              widget.data[index]!.productRetrieve!.id!);
+                          widget.data.removeAt(index);
+                        });
+                      },
+                    ),
+                  ],
+                ),
+                child: GestureDetector(
+                    onTap: () => _launchURL(context, widget.data[index]!.url),
+                    child: GameRowItem(data: widget.data[index]!)),
+              );
+            }));
   }
 
-  // @override
-  // Widget build(BuildContext context) {
-  //   print("list builder");
-  //   return AnimatedList(
-  //       key: listKey,
-  //       // cacheExtent: cacheExtentSize,
-  //       //padding: const EdgeInsets.all(1.0),
-  //       physics: const AlwaysScrollableScrollPhysics(),
-  //       // itemExtent: imageHeight,
-  //       initialItemCount: widget.data.length,
-  //       itemBuilder: (context, index, animation) {
-  //         return buildList(index, animation);
-  //       }
-  //   );
-  // }
-  //
-  // Widget buildList(int index, Animation<double> animation) {
-  //   return SizeTransition(
-  //       axis: Axis.vertical,
-  //       sizeFactor: animation,
-  //       child: Slidable(
-  //           key: UniqueKey(), // A key is necessary.
-  //           endActionPane: ActionPane(
-  //             motion: const DrawerMotion(),
-  //             extentRatio: 0.25,
-  //               dismissible: DismissiblePane(
-  //                 onDismissed: () async{
-  //                   AnimatedListRemovedItemBuilder builder = (context, animation) {
-  //                     return buildList(index, animation);
-  //                   };
-  //                   listKey.currentState!.removeItem(
-  //                       index,
-  //                       builder
-  //                   );
-  //                   await Future.delayed(Duration(milliseconds: 350), () {});
-  //                   setState(() {
-  //                     hiveWrapper
-  //                         .removeFromDb(widget.data[index]!.productRetrieve!.id!);
-  //                     widget.data.removeAt(index);
-  //                   });
-  //                 },
-  //               ),
-  //             children: [
-  //               SlidableAction(
-  //                 label: 'Delete',
-  //                 backgroundColor: Colors.red,
-  //                 icon: Icons.delete,
-  //                 onPressed: (context) async {
-  //
-  //                   AnimatedListRemovedItemBuilder builder = (context, animation) {
-  //                     return buildList(index, animation);
-  //                   };
-  //                   listKey.currentState!.removeItem(
-  //                       index,
-  //                       builder
-  //                   );
-  //                   await Future.delayed(Duration(milliseconds: 350), () {});
-  //                   setState(() {
-  //                     hiveWrapper.removeFromDb(widget.data[index]!.productRetrieve!.id!);
-  //                     widget.data.removeAt(index);
-  //                   });
-  //                 },
-  //               ),
-  //             ],
-  //           ), child: GestureDetector(
-  //             onTap: () => _launchURL(context, widget.data[index]!.url),
-  //             child: GameRowItem(data: widget.data[index]!)
-  //         )));
-  // }
-
-
-
-//   @override
-//   Widget build(BuildContext context) {
-//     final ScrollController _firstController = ScrollController();
-//     print("list builder");
-//     return LayoutBuilder(
-//         builder: (BuildContext context, BoxConstraints constraints) {
-//     return  Scrollbar(
-//           isAlwaysShown: true,
-//           controller: _firstController,
-//           child:
-//       Column(
-//         children: [
-//           for (int i=0; i< widget.data.length; i++)
-//             Slidable(
-//               key: UniqueKey(),
-//               actionPane: SlidableDrawerActionPane(),
-//               actionExtentRatio: 0.25,
-//               dismissal: SlidableDismissal(
-//                 child: SlidableDrawerDismissal(),
-//                 onDismissed: (actionType) {
-//                   hiveWrapper
-//                       .removeFromDb(widget.data[i]!.productRetrieve!.id!);
-//                   widget.data.removeAt(i);
-//                   setState(() {
-//                   });
-//                 },
-//               ),
-//               child: GestureDetector(
-//                 onTap: () => _launchURL(context, widget.data[i]!.url),
-//                 child: GameRowItem(data: widget.data[i]!),
-//               ),
-//               secondaryActions: <Widget>[
-//                 IconSlideAction(
-//                     caption: 'Delete',
-//                     color: Colors.red,
-//                     icon: Icons.delete,
-//                     onTap: () {
-//                       hiveWrapper.removeFromDb(widget.data[i]!.productRetrieve!.id!);
-//                       widget.data.removeAt(i);
-//                       setState(() {
-//                       });
-//                     }),
-//               ],
-//             )
-//         ],
-//       ));
-//   });
-//   }
 
 }
 
@@ -1051,6 +1112,7 @@ _showText(ProductRetrieve productRetrieve) {
     maxLines: 3,
     maxFontSize: 14,
   ));
+
   if (productRetrieve.webctas![0].price!.basePrice != null) {
     if (_isDiscountExist(productRetrieve)) {
       textItems.add(AutoSizeText(
@@ -1089,7 +1151,7 @@ void _launchURL(var context, var url) async => Navigator.push(
     context, MaterialPageRoute(builder: (context) => WebViewContainer(url)));
 
 class ImageWrapper extends StatelessWidget {
-  const ImageWrapper({ Key? key, required this.url }) : super(key: key);
+  const ImageWrapper({Key? key, required this.url}) : super(key: key);
   final String url;
 
   @override
@@ -1099,15 +1161,14 @@ class ImageWrapper extends StatelessWidget {
       imageUrl: url,
       placeholder: (context, url) => Center(
           child: SizedBox(
-            child: CircularProgressIndicator(
-              backgroundColor: Colors.blue,
-              valueColor: AlwaysStoppedAnimation(Colors.grey),
-            ),
-            height: 20.0,
-            width: 20.0,
-          )),
-      errorWidget: (context, url, error) =>
-          Icon(Icons.error),
+        child: CircularProgressIndicator(
+          backgroundColor: Colors.blue,
+          valueColor: AlwaysStoppedAnimation(Colors.grey),
+        ),
+        height: 20.0,
+        width: 20.0,
+      )),
+      errorWidget: (context, url, error) => Icon(Icons.error),
       width: imageWidth,
       height: imageHeight,
       fit: BoxFit.fitHeight,
@@ -1122,12 +1183,11 @@ class GameRowItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return new Card(
-      color: Theme.of(context).primaryColor,
+        color: Theme.of(context).primaryColor,
         elevation: 0.0,
         child: new Container(
           padding: new EdgeInsets.all(1.0),
           child: Row(
-
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               Flexible(

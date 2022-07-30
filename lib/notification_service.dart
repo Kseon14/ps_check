@@ -84,10 +84,6 @@ class NotificationService {
     );
   }
 
-  void cancelNotificationForBirthday(Data data) async {
-    await flutterLocalNotificationsPlugin.cancel(data.hashCode);
-  }
-
   void cancelAllNotifications() async {
     flutterLocalNotificationsPlugin.cancelAll();
   }

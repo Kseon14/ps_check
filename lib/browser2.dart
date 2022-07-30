@@ -34,8 +34,7 @@ class _WebViewContainerState extends State<WebViewContainer> {
     return Scaffold(
         appBar: AppBar(
           elevation: 0.0,
-          backgroundColor:
-              Platform.isAndroid ? Colors.white : Color(0xECECECFF),
+          backgroundColor: Color(0xECF1F1F1),
           leadingWidth: 80,
           toolbarHeight: 44,
           leading: TextButton(
