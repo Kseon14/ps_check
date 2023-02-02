@@ -20,8 +20,33 @@ class Data {
       );
     }
     if (inputJson['conceptRetrieve'] != null) {
+      if (inputJson['conceptRetrieve']['products'] == 0){
+        return Data(productRetrieve:
+        ProductRetrieve(
+            name: 'Game not available, please add game again' ,
+            id: game.id,
+            webctas: [Webctas(
+                price: Price(basePriceValue: 0,
+                    discountedValue: 0,
+                    discountedPrice: inputJson['conceptRetrieve']['releaseDate']['type'] =='COMING_SOON'? 'Announced':"0")
+            )]),
+        );
+      }
       Data conceptDate=  Data(productRetrieve: ProductRetrieve.fromJson(inputJson['conceptRetrieve']));
-      if (conceptDate.productRetrieve!.webctas!.isEmpty){
+      if (conceptDate.productRetrieve == null){
+        return Data(productRetrieve:
+        ProductRetrieve(
+            name: 'Game not available, please add game again' ,
+            id: game.id,
+            webctas: [Webctas(
+                price: Price(basePriceValue: 0,
+                    discountedValue: 0,
+                    discountedPrice: "0")
+            )]),
+        );
+      }
+      if (conceptDate.productRetrieve!.webctas!.isEmpty &&
+          conceptDate.productRetrieve!.concept!.products!.isEmpty){
        return Data(productRetrieve:
         ProductRetrieve(
             name: '${conceptDate.productRetrieve!.name}\n>>>> Not available for order, please remove and add again' ,

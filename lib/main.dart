@@ -119,6 +119,9 @@ _isDiscountExist(ProductRetrieve productRetrieve) {
   if (productRetrieve.webctas![0].price!.discountedValue == null) {
     return false;
   }
+  if (productRetrieve.webctas![0].price!.discountedValue == 0) {
+    return false;
+  }
   return productRetrieve.webctas![0].price!.discountedValue! <
       productRetrieve.webctas![0].price!.basePriceValue!;
 }
@@ -444,7 +447,6 @@ class _GameCheckerMainState extends State<GameCheckerMain>
 
   void showTutorial() async {
     TutorialCoachMark(
-      context,
       targets: targets,
       colorShadow: Colors.pink,
       textSkip: "SKIP",
@@ -463,7 +465,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
       onClickOverlay: (target) {
         debugPrint('onClickOverlay: $target');
       },
-    )..show();
+    )..show(context: context);
   }
 
   initTarget() {

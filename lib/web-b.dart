@@ -122,7 +122,6 @@ class _InAppWebviewState
 
   void showTutorial() {
     tutorialCoachMark = TutorialCoachMark(
-      context,
       targets: targets,
       colorShadow: Colors.pink,
       textSkip: "SKIP",
@@ -141,7 +140,7 @@ class _InAppWebviewState
       onClickOverlay: (target) {
         print('onClickOverlay: $target');
       },
-    )..show();
+    )..show(context: context);
   }
 
   Offset getPosition() {
@@ -535,8 +534,8 @@ class _InAppWebviewState
 
   saveGame(Future<dynamic> url) async {
     GameAttributes gm = await _prepareAttributes(await webView.getUrl());
-    int size = await getGameInfo(await webView.getUrl());
-    if (size > 1) {
+    Map details = await getGameInfo(await webView.getUrl());
+    if (details['size'] > 1) {
       List<Product> products = (await getOptions(gm))
           .productRetrieve!
           .concept!
@@ -588,15 +587,17 @@ class _InAppWebviewState
     return Future.value(Data.fromJson(response.body, game!));
   }
 
-  Future<int> getGameInfo(Uri? url) async {
+  Future<Map> getGameInfo(Uri? url) async {
     print("start retrieving");
     Map<String, String> headers = {
       "X-Psn-Store-Locale-Override": await sharedPropWrapper.readRegion()
     };
     http.Response response = await http.Client().get(url!, headers: headers);
     var document = parse(response.body);
-
-    return document.getElementsByTagName("article").length;
+    var details = new Map();
+    details['size'] = document.getElementsByTagName("article").length;
+    details['title'] = document.getElementsByClassName("psw-t-title-m")[0].nodes[0].toString();
+    return details;
   }
 
   getHigh(List<Product> products) {
