@@ -67,7 +67,8 @@ class Data {
       print("errors: $errors");
       return Data(productRetrieve:
       ProductRetrieve(
-          name: 'Not available for selected region, please select game again' ,
+          name: 'Possibly this game change place in store or not available for '
+              'the selected region, please remove and add again' ,
           id: game.id,
           webctas: [Webctas(
               price: Price(basePriceValue: 0,

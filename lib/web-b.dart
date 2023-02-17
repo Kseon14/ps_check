@@ -18,7 +18,7 @@ import 'package:glass_kit/glass_kit.dart';
 import 'hive_wrapper.dart';
 import 'main.dart';
 import 'model.dart';
-// import 'objectbox.g.dart';
+import 'dart:math';
 
 //var box;
 double iconSize = 25;
@@ -465,7 +465,6 @@ class _InAppWebviewState
 
   Widget getBottomLine() {
     return BottomAppBar(
-      //alignment: MainAxisAlignment.center,
       shape: CircularNotchedRectangle(),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -508,24 +507,13 @@ class _InAppWebviewState
             saveGame(webView.getUrl());
             await Future<void>.delayed(const Duration(milliseconds: 1000));
           },
-              // your tap handler moved here
               builder: (BuildContext context, TapDebouncerFunc? onTap) {
-                return TextButton(
-                    key: addKey,
-                    style: TextButton.styleFrom(primary: buttonColor),
-                    child: Icon(Icons.save, size: iconSize),
-                    onPressed: onTap
-                  //() async {
-                  //GameAttributes gm;
-                  // if (webView != null) {
-                  //   //gm = await saveInDb(_prepareAttributes(webView.getUrl()));
-                  //   // Navigator.of(context)
-                  //   //     .pop(_prepareAttributes(webView.getUrl()));
-                  // }
-                  // saveGame(webView.getUrl());
-                  //},
-                );
-              })
+            return TextButton(
+                key: addKey,
+                style: TextButton.styleFrom(primary: buttonColor),
+                child: Icon(Icons.save, size: iconSize),
+                onPressed: onTap);
+          })
         ],
       ),
       color: Colors.white.withOpacity(0.9),
@@ -600,6 +588,26 @@ class _InAppWebviewState
     return details;
   }
 
+  Size calcTextSize(String text, TextStyle style) {
+    final TextPainter textPainter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      textScaleFactor: WidgetsBinding.instance.window.textScaleFactor,
+    )..layout();
+    return textPainter.size;
+  }
+
+  static int roundUpAbsolute(double number) {
+    return number.isNegative ? number.floor() : number.ceil();
+  }
+
+  getWidth(List<Product> products) {
+    return products.map((product)  {
+      var widthList = calcTextSize(product.webctas![0].price!.basePrice!, TextStyle(fontSize: 16)).width;
+     return widthList;}
+    ).reduce(max)+8;
+  }
+
   getHigh(List<Product> products) {
     //390
     // 23 symb
@@ -607,166 +615,124 @@ class _InAppWebviewState
     //428
     // 30 symb
     //14.26
-    print(MediaQuery.of(context).size.width);
-    double high = 0;
-    var width = MediaQuery.of(context).size.width;
-    double k = 15.2;
-    var base = width ~/ k;
-    var baseHigh = 37;
-    print(base);
-    products.forEach((pr) => {
-      if (pr.name!.length < base & pr.platforms!.length == 1)
-        {high = high + baseHigh}
-      else if (pr.name!.length < base & pr.platforms!.length == 2)
-        {high = high + baseHigh * 2.1}
-      else if (pr.name!.length < base * 2)
-          {high = high + baseHigh * 2.1}
-        else if (pr.name!.length < base * 3)
-            {high = high + baseHigh * 2}
-          else if (pr.name!.length < base * 4)
-              {high = high + baseHigh * 2.9}
-            else if (pr.name!.length < base * 5)
-                {high = high + baseHigh * 4}
-              else if (pr.name!.length < base * 6)
-                  {high = high + baseHigh * 5}
-                else if (pr.name!.length < base * 7)
-                    {high = high + baseHigh * 5.5}
-                  else if (pr.name!.length < base * 8)
-                      {high = high + baseHigh * 6}
-                    else if (pr.name!.length < base * 9)
-                        {high = high + baseHigh * 6.5}
+    print('width of screen: ${MediaQuery.of(context).size.width}');
+    // print('text height:  ${calcTextSize(products[0].name!, TextStyle(fontSize: 16)).height}');
+    // print('text screenWidth >> ${products[0].name!} >>  '
+    //     '${}');
+
+    var screenWidth = MediaQuery.of(context).size.width;
+    double high = (screenWidth *13) /100;
+    var rowHeight = calcTextSize(products[0].name!, TextStyle(fontSize: 16)).height + 12;
+    //print(base);
+    //57%
+    print('init high: $high');
+    products.forEach((pr)  {
+      var textWidth = calcTextSize(pr.name!, TextStyle(fontSize: 16)).width;
+      print('text width: $textWidth');
+      var minWidth = (screenWidth * 61) / 100;
+      print('min width: $minWidth');
+      print('division: ${ textWidth/ minWidth })');
+      var times = pr.platforms!.length > roundUpAbsolute(textWidth/ minWidth)
+          ? pr.platforms!.length : roundUpAbsolute(textWidth/ minWidth);
+      print('how many times: $times');
+      high = high + (times * rowHeight) ;
+      print('------');
     });
+    print('#####');
     print(high);
+    print('#####');
     return high;
   }
 
   showModalSheet(List<Product> products) {
     showModalBottomSheet(
-      //isDismissible: false,
         context: context,
         builder: (builder) {
-          // List<Product> products = [];
           return StatefulBuilder(
               builder: (BuildContext context, StateSetter myState) {
-                return Container(
-                  height: (getHigh(products)).toDouble(),
-                  color: Colors.white,
-                  child: Container(
-                    //padding: EdgeInsets.all(10),
-                    //margin: EdgeInsets.fromLTRB(15, 10, 0, 10),
-                    child: Column(
-                      children: [
-                        ListView.builder(
-                            scrollDirection: Axis.vertical,
-                            shrinkWrap: true,
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            itemCount: products.length,
-                            itemBuilder: (BuildContext c, int index) {
-                              return GestureDetector(
-                                onTap: () async {
-                                  // showSaveDialog();
-                                  if (products[index].isSelected!) {
-                                    await hiveWrapper
-                                        .removeFromDb(products[index].id!);
-                                  } else {
-                                    await saveInDb(_prepareAttributesFromProduct(
-                                        products[index]));
-                                  }
-                                  myState(() {
-                                    products[index].isSelected =
+            return Container(
+              height: (getHigh(products)).toDouble(),
+              color: Colors.white,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                        scrollDirection: Axis.vertical,
+                        shrinkWrap: true,
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        itemCount: products.length,
+                        itemBuilder: (BuildContext c, int index) {
+                          return GestureDetector(
+                            onTap: () async {
+                              if (products[index].isSelected!) {
+                                await hiveWrapper
+                                    .removeFromDb(products[index].id!);
+                              } else {
+                                await saveInDb(_prepareAttributesFromProduct(
+                                    products[index]));
+                              }
+                              myState(() {
+                                products[index].isSelected =
                                     !products[index].isSelected!;
-                                    // print(products[index]);
-
-                                    //  Future.delayed(const Duration(seconds: 1), () { //asynchronous delay
-                                    //    _isVisible=!_isVisible; //update the variable declare this under your class so its accessible for both your widget build and initState which is located under widget build{}
-                                    // });
-                                    // });
-                                    //   Future.delayed(const Duration(seconds: 1), () { //asynchronous delay
-                                    // _isVisible=!_isVisible; //update the variable declare this under your class so its accessible for both your widget build and initState which is located under widget build{}
-                                  });
-                                },
-                                child: Container(
-                                    decoration: products[index].isSelected!
-                                        ? BoxDecoration(
-                                      color: Colors.lightBlue,
-                                      // border: Border.all(
-                                      //   color: Colors.black54,
-                                      // ),
-                                      //borderRadius: BorderRadius.all(Radius.circular(6))
-                                    )
-                                        : BoxDecoration(
-                                      color: Colors.white,
-                                    ),
-                                    // color: products[index]
-                                    //     .isSelected ? Colors.black38 : Colors.white,
-                                    padding: EdgeInsets.all(3),
-                                    child: Row(
-                                        mainAxisAlignment:
+                              });
+                            },
+                            child: Container(
+                                decoration: products[index].isSelected!
+                                    ? BoxDecoration(
+                                        color: Colors.lightBlue,
+                                      )
+                                    : BoxDecoration(
+                                        color: Colors.white,
+                                      ),
+                                padding: EdgeInsets.all(3),
+                                child: Row(
+                                    mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          // Flexible(
-                                          //     flex: 1,
-                                          //     child:
-                                          Align(
-                                              alignment: Alignment.center,
+                                    children: [
+                                      Align(
+                                          alignment: Alignment.center,
+                                          child: Container(
+                                              width: 40,
+                                              padding: EdgeInsets.all(6),
+                                              child: Text(
+                                                  products[index]
+                                                      .platforms!
+                                                      .join('\n'),
+                                                  style:
+                                                      TextStyle(fontSize: 13)))
+                                          //)
+                                          ),
+                                      Flexible(
+                                          flex: 3,
+                                          child: Align(
+                                              alignment: Alignment.centerLeft,
                                               child: Container(
-                                                  width: 40,
                                                   padding: EdgeInsets.all(6),
                                                   child: Text(
+                                                      products[index].name!,
+                                                      style: TextStyle(
+                                                          fontSize: 16))))),
+                                    Align(
+                                              alignment: Alignment.centerLeft,
+                                              child: Container(
+                                                  width: getWidth(products),
+                                                  padding: EdgeInsets.all(4),
+                                                  child: Text(
                                                       products[index]
-                                                          .platforms!
-                                                          .join('\n'),
-                                                      style:
-                                                      TextStyle(fontSize: 13)))
-                                            //)
-                                          ),
-                                          Flexible(
-                                              flex: 6,
-                                              child: Align(
-                                                  alignment: Alignment.centerLeft,
-                                                  child: Container(
-                                                      padding: EdgeInsets.all(6),
-                                                      child: Text(
-                                                          products[index].name!,
-                                                          style: TextStyle(
-                                                              fontSize: 16))))),
-                                          Flexible(
-                                              flex: 3,
-                                              child: Align(
-                                                  alignment: Alignment.centerLeft,
-                                                  child: Container(
-                                                      padding: EdgeInsets.all(2),
-                                                      child: Text(
-                                                          products[index]
-                                                              .webctas![0]
-                                                              .price!
-                                                              .basePrice!,
-                                                          style: TextStyle(
-                                                              fontSize: 16)))))
-                                        ])),
-                              );
-                            }),
-                        // Visibility (
-                        //     visible: _isVisible,
-                        //     // child:
-                        //     // new Padding(
-                        //     // padding: const EdgeInsets.only(
-                        //     //   left: 16.0,
-                        //     // ),
-                        //     child:
-                        //
-                        //   // )
-                        // )
-                      ],
-                    ),
-                  ),
-                );
-                // } else {
-                //   return Center(child: CircularProgressIndicator());
-                // }
-              });
+                                                          .webctas![0]
+                                                          .price!
+                                                          .basePrice!,
+                                                      style: TextStyle(
+                                                          fontSize: 16))))
+                                    ])),
+                          );
+                        }),
+                  )
+                ],
+              ),
+            );
+          });
         });
-    //});
   }
 }
 
