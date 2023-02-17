@@ -13,11 +13,12 @@ import 'package:ps_check/ga.dart';
 import 'package:ps_check/spw.dart';
 import 'package:tap_debouncer/tap_debouncer.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import 'package:glass_kit/glass_kit.dart';
 
 import 'hive_wrapper.dart';
 import 'main.dart';
 import 'model.dart';
-// import 'objectbox.g.dart';
+import 'dart:math';
 
 //var box;
 double iconSize = 25;
@@ -32,7 +33,7 @@ class InAppWebview extends StatefulWidget {
 
 class _InAppWebviewState
     extends State<InAppWebview> //with WidgetsBindingObserver
-{
+    {
   late FToast fToast;
   late TutorialCoachMark tutorialCoachMark;
 
@@ -97,14 +98,14 @@ class _InAppWebviewState
     fToast.init(context);
   }
 
-  getRegion() async{
+  getRegion() async {
     return await sharedPropWrapper.readRegion();
   }
 
   _startTutorial() async {
     if (!await sharedPropWrapper.readTutorialFlagWeb()) {
       initTarget();
-      WidgetsBinding.instance?.addPostFrameCallback(_layout);
+      WidgetsBinding.instance.addPostFrameCallback(_layout);
     }
   }
 
@@ -121,7 +122,6 @@ class _InAppWebviewState
 
   void showTutorial() {
     tutorialCoachMark = TutorialCoachMark(
-      context,
       targets: targets,
       colorShadow: Colors.pink,
       textSkip: "SKIP",
@@ -140,7 +140,7 @@ class _InAppWebviewState
       onClickOverlay: (target) {
         print('onClickOverlay: $target');
       },
-    )..show();
+    )..show(context: context);
   }
 
   Offset getPosition() {
@@ -170,7 +170,7 @@ class _InAppWebviewState
                       child: Text(
                         "Find the page of the game you want to track",
                         style: TextStyle(
-                            //fontWeight: FontWeight.bold,
+                          //fontWeight: FontWeight.bold,
                             color: Colors.white,
                             fontSize: 20.0),
                       )),
@@ -213,14 +213,14 @@ class _InAppWebviewState
                             Text(
                               "Tap save on the page of the selected game",
                               style: TextStyle(
-                                  //fontWeight: FontWeight.bold,
+                                //fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                   fontSize: 20.0),
                               // )
                             ),
                             Text(
                               "If the page contains multiple game cards, "
-                              "a pop-up window with a selection of games will appear",
+                                  "a pop-up window with a selection of games will appear",
                               style: TextStyle(
                                   color: Colors.white, fontSize: 15.0),
                             ),
@@ -254,7 +254,7 @@ class _InAppWebviewState
                             child: Text(
                               "Click here to get back to list of selected games",
                               style: TextStyle(
-                                  //fontWeight: FontWeight.bold,
+                                //fontWeight: FontWeight.bold,
                                   color: Colors.white,
                                   fontSize: 20.0),
                             ))),
@@ -288,9 +288,8 @@ class _InAppWebviewState
                     // here the desired height
                     child: AppBar(
                       elevation: 0.0,
-                      brightness: Brightness.light,
-                      backgroundColor:
-                          Platform.isAndroid ? Colors.white : Color(0xECECECFF),
+                      //brightness: Brightness.light,
+                      backgroundColor: Color(0xECF1F1F1),
                       // title: RichText(
                       //   text: TextSpan(
                       //     children: [
@@ -311,7 +310,10 @@ class _InAppWebviewState
                       leading: TextButton(
                         key: doneKey,
                         onPressed: () => Navigator.of(context).pop(),
-                        child: Text('Done', style: TextStyle(fontSize: 17)),
+                        child: Text('Done',
+                            style: TextStyle(
+                                fontSize: 17,
+                                color: Color.fromARGB(255, 0, 114, 206))),
                       ),
                       // leading: GestureDetector(
                       //   onTap: () => Navigator.of(context).pop(),
@@ -335,122 +337,126 @@ class _InAppWebviewState
                 body: Container(
                     child: showBlankScreen
                         ? Center(
-                            child: SizedBox(
-                                width: 300.0,
-                                height: 300.0,
-                                child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: <Widget>[
-                                      Text(
-                                          "Sorry, you switched to PlayStation.com by mistake, "
-                                              "it may have been in search, please return to PlayStation Store"),
-                                      IconButton(
-                                        iconSize: 28,
-                                        splashColor: Colors.green,
-                                        icon: const Icon(Icons.home_rounded),
-                                        //tooltip: 'Increase volume by 10',
-                                        onPressed: () {
-                                          setState(() {
-                                            showBlankScreen = !showBlankScreen;
-                                          });
-                                          // setState(() {
-                                          //   _refreshListButton();
-                                          // });
-                                        },
-                                      )
-                                    ])))
-                        : Column(children: <Widget>[
-                            Container(
-                                // padding: EdgeInsets.all(10.0),
-                                child: progress < 1.0
-                                    ? LinearProgressIndicator(value: progress,
-                                  minHeight: 2,
-                                  backgroundColor: Colors.lightBlueAccent,
-                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.lightBlue),)
-                                    : Container()),
-                            Container(
-                              child: Expanded(
-                                // decoration:
-                                // BoxDecoration(border: Border.all(color: Colors.blueAccent)),
-                                child: InAppWebView(
-
-                                  // gestureRecognizers: Set()
-                                  //   ..add(Factory<HorizontalDragGestureRecognizer>(
-                                  //       () => HorizontalDragGestureRecognizer()
-                                  //         ..onUpdate = (details) {
-                                  //           int sensitivity = 8;
-                                  //           if (details.delta.dx > sensitivity) {
-                                  //             print("right");
-                                  //             if (webView != null) {
-                                  //               webView.goBack();
-                                  //             }
-                                  //           } else if(details.delta.dx < -sensitivity){
-                                  //             if (webView != null) {
-                                  //               webView.goBack();
-                                  //             }
-                                  //             print("left");
-                                  //             //Left Swipe
-                                  //           }
-                                  //         })),
-                                  key: browserKey,
-                                  initialUrlRequest: URLRequest(
-                                      url: Uri.parse(
-                                          'https://store.playstation.com/'
-                                          '${snapshot.data}'
-                                          '/latest')),
-                                  //gestureRecognizers:
-                                  initialOptions: InAppWebViewGroupOptions(
-                                      crossPlatform: InAppWebViewOptions(
-                                          useShouldOverrideUrlLoading: true
-                                          //debuggingEnabled: true,
-                                          )),
-                                  onWebViewCreated:
-                                      (InAppWebViewController controller) {
-                                    webView = controller;
-                                    webView.clearCache();
-                                    cookieManager.setCookie(
-                                        url: Uri.parse("https://store.playstation.com"),
-                                        name: "eucookiepreference",
-                                        value: "accept",
-                                        domain: ".playstation.com",
-                                        isHttpOnly: false);
-                                    // controller.addJavaScriptHandler(
-                                    //     handlerName: 'handlerFooWithArgs',
-                                    //     callback: (args) {
-                                    //       //print(args);
-                                    //       // it will print: [1, true, [bar, 5], {foo: baz}, {bar: bar_value, baz: baz_value}]
-                                    //     }
-                                    //     );
-                                  },
-                                  onLoadStart:
-                                      (InAppWebViewController controller,
-                                          Uri? uri) {
-                                    var url = uri.toString().split('/')[2];
-                                    if (url == "www.playstation.com") {
+                        child: SizedBox(
+                            width: 300.0,
+                            height: 300.0,
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                crossAxisAlignment:
+                                CrossAxisAlignment.center,
+                                children: <Widget>[
+                                  Text(
+                                      "Sorry, you switched to PlayStation.com by mistake, "
+                                          "it may have been in search, please return to PlayStation Store"),
+                                  IconButton(
+                                    iconSize: 28,
+                                    splashColor: Colors.green,
+                                    icon: const Icon(Icons.home_rounded),
+                                    //tooltip: 'Increase volume by 10',
+                                    onPressed: () {
                                       setState(() {
                                         showBlankScreen = !showBlankScreen;
                                       });
-                                      //return Container();
-                                    }
-                                  },
-                                  // onLoadStop: (InAppWebViewController controller, Uri uri) async {
-                                  //   List<Cookie> cookies = await cookieManager.getCookies(url: uri);
-                                  //   print("cookies  $cookies");
-                                  // },
+                                      // setState(() {
+                                      //   _refreshListButton();
+                                      // });
+                                    },
+                                  )
+                                ])))
+                        : Column(children: <Widget>[
+                      Container(
+                        // padding: EdgeInsets.all(10.0),
+                          child: progress < 1.0
+                              ? LinearProgressIndicator(
+                            value: progress,
+                            minHeight: 2,
+                            backgroundColor: Colors.lightBlueAccent,
+                            valueColor: AlwaysStoppedAnimation<
+                                Color>(
+                                Color.fromARGB(255, 0, 114, 206)),
+                          )
+                              : Container()),
+                      Container(
+                        child: Expanded(
+                          // decoration:
+                          // BoxDecoration(border: Border.all(color: Colors.blueAccent)),
+                          child: InAppWebView(
+                            // gestureRecognizers: Set()
+                            //   ..add(Factory<HorizontalDragGestureRecognizer>(
+                            //       () => HorizontalDragGestureRecognizer()
+                            //         ..onUpdate = (details) {
+                            //           int sensitivity = 8;
+                            //           if (details.delta.dx > sensitivity) {
+                            //             print("right");
+                            //             if (webView != null) {
+                            //               webView.goBack();
+                            //             }
+                            //           } else if(details.delta.dx < -sensitivity){
+                            //             if (webView != null) {
+                            //               webView.goBack();
+                            //             }
+                            //             print("left");
+                            //             //Left Swipe
+                            //           }
+                            //         })),
+                            key: browserKey,
+                            initialUrlRequest: URLRequest(
+                                url: Uri.parse(
+                                    'https://store.playstation.com/'
+                                        '${snapshot.data}'
+                                        '/latest')),
+                            //gestureRecognizers:
+                            initialOptions: InAppWebViewGroupOptions(
+                                crossPlatform: InAppWebViewOptions(
+                                    useShouldOverrideUrlLoading: true
+                                  //debuggingEnabled: true,
+                                )),
+                            onWebViewCreated:
+                                (InAppWebViewController controller) {
+                              webView = controller;
+                              webView.clearCache();
+                              cookieManager.setCookie(
+                                  url: Uri.parse(
+                                      "https://store.playstation.com"),
+                                  name: "eucookiepreference",
+                                  value: "accept",
+                                  domain: ".playstation.com",
+                                  isHttpOnly: false);
+                              // controller.addJavaScriptHandler(
+                              //     handlerName: 'handlerFooWithArgs',
+                              //     callback: (args) {
+                              //       //print(args);
+                              //       // it will print: [1, true, [bar, 5], {foo: baz}, {bar: bar_value, baz: baz_value}]
+                              //     }
+                              //     );
+                            },
+                            onLoadStart:
+                                (InAppWebViewController controller,
+                                Uri? uri) {
+                              var url = uri.toString().split('/')[2];
+                              if (url == "www.playstation.com") {
+                                setState(() {
+                                  showBlankScreen = !showBlankScreen;
+                                });
+                                //return Container();
+                              }
+                            },
+                            // onLoadStop: (InAppWebViewController controller, Uri uri) async {
+                            //   List<Cookie> cookies = await cookieManager.getCookies(url: uri);
+                            //   print("cookies  $cookies");
+                            // },
 
-                                  onProgressChanged:
-                                      (InAppWebViewController controller,
-                                          int progress) {
-                                    setState(() {
-                                      this.progress = progress / 100;
-                                    });
-                                  },
-                                ),
-                              ),
-                            ),
-                          ])),
+                            onProgressChanged:
+                                (InAppWebViewController controller,
+                                int progress) {
+                              setState(() {
+                                this.progress = progress / 100;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ])),
               ));
         } else {
           return CircularProgressIndicator();
@@ -459,7 +465,6 @@ class _InAppWebviewState
 
   Widget getBottomLine() {
     return BottomAppBar(
-      //alignment: MainAxisAlignment.center,
       shape: CircularNotchedRectangle(),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -502,38 +507,28 @@ class _InAppWebviewState
             saveGame(webView.getUrl());
             await Future<void>.delayed(const Duration(milliseconds: 1000));
           },
-              // your tap handler moved here
               builder: (BuildContext context, TapDebouncerFunc? onTap) {
             return TextButton(
                 key: addKey,
                 style: TextButton.styleFrom(primary: buttonColor),
                 child: Icon(Icons.save, size: iconSize),
-                onPressed: onTap
-                //() async {
-                //GameAttributes gm;
-                // if (webView != null) {
-                //   //gm = await saveInDb(_prepareAttributes(webView.getUrl()));
-                //   // Navigator.of(context)
-                //   //     .pop(_prepareAttributes(webView.getUrl()));
-                // }
-                // saveGame(webView.getUrl());
-                //},
-                );
+                onPressed: onTap);
           })
         ],
       ),
-      color: Colors.white.withOpacity(0.93),
+      color: Colors.white.withOpacity(0.9),
     );
   }
 
   saveGame(Future<dynamic> url) async {
     GameAttributes gm = await _prepareAttributes(await webView.getUrl());
-    int size = await getGameInfo(await webView.getUrl());
-    if (size > 1) {
+    Map details = await getGameInfo(await webView.getUrl());
+    if (details['size'] > 1) {
       List<Product> products = (await getOptions(gm))
           .productRetrieve!
           .concept!
           .products!
+          .where((p) => p.webctas!.length > 0)
           .where((p) => p.webctas![0].type != "CHOOSE_A_VERSION")
           .where((p) => p.webctas![0].price!.basePrice != null)
           .toList();
@@ -545,6 +540,20 @@ class _InAppWebviewState
             product.isSelected = true;
           }
         }
+        products.sort((a, b) {
+          if (a.webctas![0].price!.discountedValue == null &&
+              b.webctas![0].price!.discountedValue == null) {
+            return 0;
+          }
+          if (a.webctas![0].price!.discountedValue == null) {
+            return 1;
+          }
+          if (b.webctas![0].price!.discountedValue == null) {
+            return -1;
+          }
+          return a.webctas![0].price!.discountedValue!
+              .compareTo(b.webctas![0].price!.discountedValue!);
+        });
         showModalSheet(products);
       }
     } else {
@@ -566,51 +575,88 @@ class _InAppWebviewState
     return Future.value(Data.fromJson(response.body, game!));
   }
 
-  Future<int> getGameInfo(Uri? url) async {
+  Future<Map> getGameInfo(Uri? url) async {
     print("start retrieving");
     Map<String, String> headers = {
       "X-Psn-Store-Locale-Override": await sharedPropWrapper.readRegion()
     };
     http.Response response = await http.Client().get(url!, headers: headers);
     var document = parse(response.body);
+    var details = new Map();
+    details['size'] = document.getElementsByTagName("article").length;
+    details['title'] = document.getElementsByClassName("psw-t-title-m")[0].nodes[0].toString();
+    return details;
+  }
 
-    return document.getElementsByTagName("article").length;
+  Size calcTextSize(String text, TextStyle style) {
+    final TextPainter textPainter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: TextDirection.ltr,
+      textScaleFactor: WidgetsBinding.instance.window.textScaleFactor,
+    )..layout();
+    return textPainter.size;
+  }
+
+  static int roundUpAbsolute(double number) {
+    return number.isNegative ? number.floor() : number.ceil();
+  }
+
+  getWidth(List<Product> products) {
+    return products.map((product)  {
+      var widthList = calcTextSize(product.webctas![0].price!.basePrice!, TextStyle(fontSize: 16)).width;
+     return widthList;}
+    ).reduce(max)+8;
   }
 
   getHigh(List<Product> products) {
-    var high = 0;
-    // var base = 37;
-    products.forEach((pr) => {
-          // if (pr.name!.length < 25) {
-          //   high = high + base
-          // }
-          if (pr.name!.length < 47)
-            {high = high + 36 * 2}
-          else if (pr.name!.length < 70)
-            {high = high + 33 * 3}
-          else if (pr.name!.length < 90)
-            {high = high + 33 * 4}
-        });
+    //390
+    // 23 symb
+    //16.95
+    //428
+    // 30 symb
+    //14.26
+    print('width of screen: ${MediaQuery.of(context).size.width}');
+    // print('text height:  ${calcTextSize(products[0].name!, TextStyle(fontSize: 16)).height}');
+    // print('text screenWidth >> ${products[0].name!} >>  '
+    //     '${}');
+
+    var screenWidth = MediaQuery.of(context).size.width;
+    double high = (screenWidth *13) /100;
+    var rowHeight = calcTextSize(products[0].name!, TextStyle(fontSize: 16)).height + 12;
+    //print(base);
+    //57%
+    print('init high: $high');
+    products.forEach((pr)  {
+      var textWidth = calcTextSize(pr.name!, TextStyle(fontSize: 16)).width;
+      print('text width: $textWidth');
+      var minWidth = (screenWidth * 61) / 100;
+      print('min width: $minWidth');
+      print('division: ${ textWidth/ minWidth })');
+      var times = pr.platforms!.length > roundUpAbsolute(textWidth/ minWidth)
+          ? pr.platforms!.length : roundUpAbsolute(textWidth/ minWidth);
+      print('how many times: $times');
+      high = high + (times * rowHeight) ;
+      print('------');
+    });
+    print('#####');
+    print(high);
+    print('#####');
     return high;
   }
 
   showModalSheet(List<Product> products) {
     showModalBottomSheet(
-        //isDismissible: false,
         context: context,
         builder: (builder) {
-          // List<Product> products = [];
           return StatefulBuilder(
               builder: (BuildContext context, StateSetter myState) {
             return Container(
               height: (getHigh(products)).toDouble(),
               color: Colors.white,
-              child: Container(
-                //padding: EdgeInsets.all(10),
-                //margin: EdgeInsets.fromLTRB(15, 10, 0, 10),
-                child: Column(
-                  children: [
-                    ListView.builder(
+              child: Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
                         scrollDirection: Axis.vertical,
                         shrinkWrap: true,
                         physics: const AlwaysScrollableScrollPhysics(),
@@ -618,7 +664,6 @@ class _InAppWebviewState
                         itemBuilder: (BuildContext c, int index) {
                           return GestureDetector(
                             onTap: () async {
-                              // showSaveDialog();
                               if (products[index].isSelected!) {
                                 await hiveWrapper
                                     .removeFromDb(products[index].id!);
@@ -629,38 +674,21 @@ class _InAppWebviewState
                               myState(() {
                                 products[index].isSelected =
                                     !products[index].isSelected!;
-                                // print(products[index]);
-
-                                //  Future.delayed(const Duration(seconds: 1), () { //asynchronous delay
-                                //    _isVisible=!_isVisible; //update the variable declare this under your class so its accessible for both your widget build and initState which is located under widget build{}
-                                // });
-                                // });
-                                //   Future.delayed(const Duration(seconds: 1), () { //asynchronous delay
-                                // _isVisible=!_isVisible; //update the variable declare this under your class so its accessible for both your widget build and initState which is located under widget build{}
                               });
                             },
                             child: Container(
                                 decoration: products[index].isSelected!
                                     ? BoxDecoration(
                                         color: Colors.lightBlue,
-                                        // border: Border.all(
-                                        //   color: Colors.black54,
-                                        // ),
-                                        //borderRadius: BorderRadius.all(Radius.circular(6))
                                       )
                                     : BoxDecoration(
                                         color: Colors.white,
                                       ),
-                                // color: products[index]
-                                //     .isSelected ? Colors.black38 : Colors.white,
                                 padding: EdgeInsets.all(3),
                                 child: Row(
                                     mainAxisAlignment:
                                         MainAxisAlignment.spaceBetween,
                                     children: [
-                                      // Flexible(
-                                      //     flex: 1,
-                                      //     child:
                                       Align(
                                           alignment: Alignment.center,
                                           child: Container(
@@ -675,7 +703,7 @@ class _InAppWebviewState
                                           //)
                                           ),
                                       Flexible(
-                                          flex: 6,
+                                          flex: 3,
                                           child: Align(
                                               alignment: Alignment.centerLeft,
                                               child: Container(
@@ -684,43 +712,27 @@ class _InAppWebviewState
                                                       products[index].name!,
                                                       style: TextStyle(
                                                           fontSize: 16))))),
-                                      Flexible(
-                                          flex: 3,
-                                          child: Align(
+                                    Align(
                                               alignment: Alignment.centerLeft,
                                               child: Container(
-                                                  padding: EdgeInsets.all(2),
+                                                  width: getWidth(products),
+                                                  padding: EdgeInsets.all(4),
                                                   child: Text(
                                                       products[index]
                                                           .webctas![0]
                                                           .price!
                                                           .basePrice!,
                                                       style: TextStyle(
-                                                          fontSize: 16)))))
+                                                          fontSize: 16))))
                                     ])),
                           );
                         }),
-                    // Visibility (
-                    //     visible: _isVisible,
-                    //     // child:
-                    //     // new Padding(
-                    //     // padding: const EdgeInsets.only(
-                    //     //   left: 16.0,
-                    //     // ),
-                    //     child:
-                    //
-                    //   // )
-                    // )
-                  ],
-                ),
+                  )
+                ],
               ),
             );
-            // } else {
-            //   return Center(child: CircularProgressIndicator());
-            // }
           });
         });
-    //});
   }
 }
 
@@ -755,7 +767,7 @@ _prepareAttributesFromProduct(Product product) async {
   return new GameAttributes(
       gameId: product.id!,
       imgUrl:
-          product.media!.firstWhere((m) => m.role == "MASTER").url! + "?w=300",
+      product.media!.firstWhere((m) => m.role == "MASTER").url! + "?w=250",
       type: GameType.PRODUCT,
       url: "https://store.playstation.com/$region/product/" + product.id!);
 }
@@ -772,7 +784,7 @@ _getGameImageUrl(Uri? futureUrl) async {
         .querySelector('img[data-qa="gameBackgroundImage#tileImage#preview"]');
   }
   String imageUrl = imgElement!.attributes['src']!;
-  return imageUrl.substring(0, imageUrl.indexOf("?")) + "?w=300";
+  return imageUrl.substring(0, imageUrl.indexOf("?")) + "?w=250";
 }
 
 _getGameId(Uri? url) async {
@@ -797,7 +809,7 @@ _getType(Uri? url) async {
 
 showSaveDialog(var context) {
   showDialog(
-      // context: _scaffoldKey.currentContext,
+    // context: _scaffoldKey.currentContext,
       context: context,
       barrierColor: Colors.black26,
       builder: (dialogContext) {
@@ -805,53 +817,53 @@ showSaveDialog(var context) {
           Navigator.of(context).pop(true);
         });
         return
-            // new BackdropFilter(
-            //   filter: new ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-            //   child:
-            Dialog(
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(0.0)),
-                backgroundColor: Colors.white.withOpacity(0.93),
-                // insetPadding: EdgeInsets.symmetric(horizontal: 160),
-                elevation: 0,
-                insetPadding: EdgeInsets.zero,
-                child: Stack(
-                  //clipBehavior: Clip.antiAlias,
-                  alignment: Alignment.topCenter,
-                  children: [
-                    //   new BackdropFilter(
-                    // filter: new ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
-                    //  child:
-                    Container(
-                      width: double.infinity,
-                      height: 55,
-                      child: Padding(
-                        // padding: const EdgeInsets.fromLTRB(10, 20, 10, 10),
-                        padding: const EdgeInsets.all(2),
-                        child: Column(
-                          children: [
-                            //Text('added', style: TextStyle(fontSize: 20),),
-                            Icon(
-                              Icons.save,
-                              color: Color(0xC4000000).withOpacity(0.93),
-                              size: 50,
-                            )
-                          ],
-                        ),
+          // new BackdropFilter(
+          //   filter: new ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
+          //   child:
+          Dialog(
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(0.0)),
+              backgroundColor: Colors.white.withOpacity(0.93),
+              // insetPadding: EdgeInsets.symmetric(horizontal: 160),
+              elevation: 0,
+              insetPadding: EdgeInsets.zero,
+              child: Stack(
+                //clipBehavior: Clip.antiAlias,
+                alignment: Alignment.topCenter,
+                children: [
+                  //   new BackdropFilter(
+                  // filter: new ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+                  //  child:
+                  Container(
+                    width: double.infinity,
+                    height: 55,
+                    child: Padding(
+                      // padding: const EdgeInsets.fromLTRB(10, 20, 10, 10),
+                      padding: const EdgeInsets.all(2),
+                      child: Column(
+                        children: [
+                          //Text('added', style: TextStyle(fontSize: 20),),
+                          Icon(
+                            Icons.save,
+                            color: Color(0xC4000000).withOpacity(0.93),
+                            size: 50,
+                          )
+                        ],
                       ),
                     ),
-                    // Positioned(
-                    //     top: -50,
-                    //     child: CircleAvatar(
-                    //       backgroundColor: Colors.transparent,
-                    //       radius: 50,
-                    //       child: Icon(Icons.save, color: Colors.blue, size: 40,),
-                    //     )
-                    // ),
-                    //)
-                  ],
-                )
-                //)
-                );
+                  ),
+                  // Positioned(
+                  //     top: -50,
+                  //     child: CircleAvatar(
+                  //       backgroundColor: Colors.transparent,
+                  //       radius: 50,
+                  //       child: Icon(Icons.save, color: Colors.blue, size: 40,),
+                  //     )
+                  // ),
+                  //)
+                ],
+              )
+            //)
+          );
       });
 }

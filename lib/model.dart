@@ -20,7 +20,46 @@ class Data {
       );
     }
     if (inputJson['conceptRetrieve'] != null) {
-      return Data(productRetrieve: ProductRetrieve.fromJson(inputJson['conceptRetrieve']));
+      if (inputJson['conceptRetrieve']['products'] == 0){
+        return Data(productRetrieve:
+        ProductRetrieve(
+            name: 'Game not available, please add game again' ,
+            id: game.id,
+            webctas: [Webctas(
+                price: Price(basePriceValue: 0,
+                    discountedValue: 0,
+                    discountedPrice: inputJson['conceptRetrieve']['releaseDate']['type'] =='COMING_SOON'? 'Announced':"0")
+            )]),
+        );
+      }
+      Data conceptDate=  Data(productRetrieve: ProductRetrieve.fromJson(inputJson['conceptRetrieve']));
+      if (conceptDate.productRetrieve == null){
+        return Data(productRetrieve:
+        ProductRetrieve(
+            name: 'Game not available, please add game again' ,
+            id: game.id,
+            webctas: [Webctas(
+                price: Price(basePriceValue: 0,
+                    discountedValue: 0,
+                    discountedPrice: "0")
+            )]),
+        );
+      }
+      if (conceptDate.productRetrieve!.webctas!.isEmpty &&
+          conceptDate.productRetrieve!.concept!.products!.isEmpty){
+       return Data(productRetrieve:
+        ProductRetrieve(
+            name: '${conceptDate.productRetrieve!.name}\n>>>> Not available for order, please remove and add again' ,
+            id: game.id,
+            webctas: [Webctas(
+                price: Price(basePriceValue: 0,
+                    discountedValue: 0,
+                    discountedPrice: 'Not available for order, please remove and add again')
+            )]),
+        );
+      } else {
+        return conceptDate;
+      }
     }
     else {
       List<Error> errors = json.decode(body)['errors']
@@ -28,7 +67,8 @@ class Data {
       print("errors: $errors");
       return Data(productRetrieve:
       ProductRetrieve(
-          name: 'Not available for selected region, please select game again' ,
+          name: 'Possibly this game change place in store or not available for '
+              'the selected region, please remove and add again' ,
           id: game.id,
           webctas: [Webctas(
               price: Price(basePriceValue: 0,
@@ -80,6 +120,9 @@ class ProductRetrieve {
     }
     List<Webctas> wct = List.empty();
     if(concept == null) {
+      if( json['webctas'] == null){
+        return null;
+      }
       var webctasList = json['webctas'] as List;
       wct = webctasList.map((wb) => Webctas.fromJson(wb)).toList();
     }
@@ -87,7 +130,7 @@ class ProductRetrieve {
     return ProductRetrieve(
         id: isConcept && json['concept'] !=null ? json['concept']['id']
         : json['id'],
-        name: json['name'],
+        name: json['name'] == null ? concept!.products![0].name : json['name'],
         webctas: wct,
          concept:concept);
   }
@@ -113,13 +156,13 @@ class Concept {
      return 'Concept{products: $products}';
    }
 
-   static Concept? fromJson(Map<String, dynamic> json) {
+   static Concept? fromJson(Map<String, dynamic>? json) {
      if(json == null){
        return null;
      }
      var products = json['products'] == null ? null : json['products'] as List;
 
-     if(products == null) {
+     if(products == null || products.length == 0) {
        return null;
      }
 
@@ -146,7 +189,16 @@ class Product{
   }
 
   factory Product.fromJson(Map<String, dynamic> json) {
-    var webctasList = json['webctas'] as List;
+    var webctasList = ((json['webctas'] ?? []) as List);
+    if(webctasList.isEmpty) {
+      return Product(
+          platforms: null,
+          media: null,
+          webctas: null,
+          id: json['id'],
+          name: json['name']
+      );
+    }
     var platformList = (json['platforms'] as List).cast<String>();
     var mediaList = json['media'] as List;
 

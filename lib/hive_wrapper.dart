@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:collection/src/iterable_extensions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:path_provider/path_provider.dart';
@@ -10,7 +11,7 @@ import 'ga.dart';
 
 class HiveWrapper{
   var boxName= 'game-box';
-  var box;
+  Box<GameAttributes>? box;
   static HiveWrapper hiveInternal = HiveWrapper();
   static var lock = Lock();
 
@@ -81,7 +82,7 @@ class HiveWrapper{
    readFromDb() async {
     await openIfNotOpened();
     print('read from db');
-    var values = box.values;
+    var values = box!.values;
     return values.length == 0 ? List<GameAttributes>.empty(): values.toList();
   }
 
@@ -96,7 +97,7 @@ class HiveWrapper{
     final index = values
         .indexWhere((gameAttr) => gameAttr.gameId == gm.gameId);
     if (index == -1) {
-      box.add(gm);
+      box!.add(gm);
       print('saved in box$gm');
     }
   }
@@ -121,7 +122,11 @@ class HiveWrapper{
   }
 
   close() async{
-    await box?.close();
+    try {
+      await box?.close();
+    } on FileSystemException {
+      debugPrint("error");
+    }
     print("box is closed");
     box = null;
   }

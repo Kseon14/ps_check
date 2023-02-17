@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -7,6 +8,19 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'model.dart';
 
 const String applicationName = "Game Checker";
+
+@pragma('vm:entry-point')
+void notificationTapBackground(NotificationResponse notificationResponse) {
+  // ignore: avoid_print
+  print('notification(${notificationResponse.id}) action tapped: '
+      '${notificationResponse.actionId} with'
+      ' payload: ${notificationResponse.payload}');
+  if (notificationResponse.input?.isNotEmpty ?? false) {
+    // ignore: avoid_print
+    print(
+        'notification action tapped with input: ${notificationResponse.input}');
+  }
+}
 
 class NotificationService {
   static final NotificationService _notificationService =
@@ -27,13 +41,20 @@ class NotificationService {
     final AndroidInitializationSettings initializationSettingsAndroid =
     AndroidInitializationSettings('@mipmap/ic_launcher');
 
-    final IOSInitializationSettings initializationSettingsIOS =
-    IOSInitializationSettings(
+    final DarwinInitializationSettings initializationSettingsIOS =
+    DarwinInitializationSettings(
       requestSoundPermission: true,
       requestBadgePermission: true,
       requestAlertPermission: true,
       //onDidReceiveLocalNotification: onDidReceiveLocalNotification,
     );
+
+    final StreamController<String?> selectNotificationStream =
+    StreamController<String?>.broadcast();
+
+    const String navigationActionId = 'id_3';
+
+
 
     final InitializationSettings initializationSettings =
     InitializationSettings(
@@ -41,7 +62,20 @@ class NotificationService {
         iOS: initializationSettingsIOS,
         macOS: null);
     await flutterLocalNotificationsPlugin.initialize(initializationSettings,
-        onSelectNotification: selectNotification);
+      onDidReceiveNotificationResponse:
+          (NotificationResponse notificationResponse) {
+        switch (notificationResponse.notificationResponseType) {
+          case NotificationResponseType.selectedNotification:
+            selectNotificationStream.add(notificationResponse.payload);
+            break;
+          case NotificationResponseType.selectedNotificationAction:
+            if (notificationResponse.actionId == navigationActionId) {
+              selectNotificationStream.add(notificationResponse.payload);
+            }
+            break;
+        }
+      },
+      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,);
     tz.initializeTimeZones();
   }
 
@@ -70,7 +104,7 @@ class NotificationService {
                 applicationName,
                 ),
           iOS: const
-            IOSNotificationDetails(
+          DarwinNotificationDetails(
             presentAlert: false,  // Present an alert when the notification is displayed and the application is in the foreground (only from iOS 10 onwards)
             presentBadge: false,  // Present the badge number when the notification is displayed and the application is in the foreground (only from iOS 10 onwards)
             presentSound: true,  // Play a sound when the notification is displayed and the application is in the foreground (only from iOS 10 onwards)// Specifics the file path to play (only from iOS 10 onwards)
@@ -84,22 +118,14 @@ class NotificationService {
     );
   }
 
-  void cancelNotificationForBirthday(Data data) async {
-    await flutterLocalNotificationsPlugin.cancel(data.hashCode);
-  }
-
   void cancelAllNotifications() async {
-    await flutterLocalNotificationsPlugin.cancelAll();
+    flutterLocalNotificationsPlugin.cancelAll();
   }
 
   void handleApplicationWasLaunchedFromNotification() async {
     final NotificationAppLaunchDetails? notificationAppLaunchDetails =
     await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
 
-    if (notificationAppLaunchDetails!.didNotificationLaunchApp) {
-      Data userBirthday = getGaFromJson(notificationAppLaunchDetails.payload!);
-      cancelNotificationForBirthday(userBirthday);
-    }
   }
 
   Data getGaFromJson(String payload) {
