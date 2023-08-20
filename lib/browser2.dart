@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-// import 'package:webview_cookie_manager/webview_cookie_manager.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart' as inapp;
+import 'package:webview_cookie_manager/webview_cookie_manager.dart';
 
 class WebViewContainer extends StatefulWidget {
   final url;
@@ -15,19 +15,47 @@ class WebViewContainer extends StatefulWidget {
 
 class _WebViewContainerState extends State<WebViewContainer> {
   var _url;
-  InAppWebViewController? _webViewController;
+  inapp.InAppWebViewController? _webViewController;
   double progress = 0;
 
-  // final cookieManager = WebviewCookieManager();
-  CookieManager cookieManager = CookieManager.instance();
+  //inapp.CookieManager cookieManager = inapp.CookieManager.instance();
+  final cookieManager1 = WebviewCookieManager();
 
   _WebViewContainerState(this._url);
 
   @override
   void initState() {
     super.initState();
-    cookieManager.deleteAllCookies();
+   // cookieManager.deleteAllCookies();
+   // setCookie();
+    setCookie2();
   }
+
+  void setCookie2() async {
+    await cookieManager1.clearCookies();
+    cookieManager1.setCookies([
+      Cookie('eucookiepreference', 'reject')
+        ..domain = '.playstation.com'
+        ..expires = DateTime.now().add(Duration(days: 5))
+        ..httpOnly = false
+    ], origin: 'https://store.playstation.com');
+  }
+
+  //void setCookie() async {
+
+  //   await cookieManager.setCookie(
+  //       url: Uri.parse("https://store.playstation.com"),
+  //       name: "eucookiepreference",
+  //       value: "reject",
+  //       domain: ".playstation.com",
+  //       isHttpOnly: false,
+  //       path: "/",
+  //       sameSite: inapp.HTTPCookieSameSitePolicy.NONE,
+  //       expiresDate: DateTime
+  //           .now()
+  //           .add(Duration(days: 7))
+  //           .millisecondsSinceEpoch ~/ 1000);
+  // }
 
   @override
   Widget build(BuildContext context) {
@@ -54,25 +82,19 @@ class _WebViewContainerState extends State<WebViewContainer> {
                     : Container()),
             Container(
               child: Expanded(
-                child: InAppWebView(
-                  initialUrlRequest: URLRequest(url: Uri.parse(_url)),
-                  initialOptions: InAppWebViewGroupOptions(
+                child: inapp.InAppWebView(
+                  initialUrlRequest: inapp.URLRequest(url: Uri.parse(_url)),
+                  initialOptions: inapp.InAppWebViewGroupOptions(
                       crossPlatform:
-                          InAppWebViewOptions(useShouldOverrideUrlLoading: true
+                      inapp.InAppWebViewOptions(useShouldOverrideUrlLoading: true
                               //debuggingEnabled: true,
                               )),
-                  onWebViewCreated: (InAppWebViewController controller) async {
+                  onWebViewCreated: (inapp.InAppWebViewController controller) async {
                     _webViewController = controller;
-                    _webViewController?.clearCache();
-                    cookieManager.setCookie(
-                        url: Uri.parse("https://store.playstation.com"),
-                        name: "eucookiepreference",
-                        value: "accept",
-                        domain: ".playstation.com",
-                        isHttpOnly: false);
-                  },
+                   // _webViewController?.clearCache();
+                   },
                   onProgressChanged:
-                      (InAppWebViewController controller, int progress) {
+                      (inapp.InAppWebViewController controller, int progress) {
                     setState(() {
                       this.progress = progress / 100;
                     });

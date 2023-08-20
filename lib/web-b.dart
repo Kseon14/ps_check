@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/gestures.dart';
@@ -13,7 +12,6 @@ import 'package:ps_check/ga.dart';
 import 'package:ps_check/spw.dart';
 import 'package:tap_debouncer/tap_debouncer.dart';
 import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
-import 'package:glass_kit/glass_kit.dart';
 
 import 'hive_wrapper.dart';
 import 'main.dart';
@@ -31,9 +29,7 @@ class InAppWebview extends StatefulWidget {
   _InAppWebviewState createState() => new _InAppWebviewState();
 }
 
-class _InAppWebviewState
-    extends State<InAppWebview> //with WidgetsBindingObserver
-    {
+class _InAppWebviewState extends State<InAppWebview> {
   late FToast fToast;
   late TutorialCoachMark tutorialCoachMark;
 
@@ -43,20 +39,6 @@ class _InAppWebviewState
   double progress = 0;
   var gameId;
   var showBlankScreen = false;
-
-  // @override
-  // void didChangeAppLifecycleState(AppLifecycleState state) {
-  //   super.didChangeAppLifecycleState(state);
-  //   if (state == AppLifecycleState.detached) {
-  //     print("AppLifecycleState.detached");
-  //     Hive.close();
-  //   }
-  //   if (state == AppLifecycleState.inactive) {
-  //     print("AppLifecycleState.inactive");
-  //     Hive.close();
-  //     //_refreshList();
-  //   }
-  // }
 
   Future<GameAttributes> saveInDb(Future<dynamic> gameAttributes) async {
     GameAttributes gm = await gameAttributes;
@@ -107,6 +89,10 @@ class _InAppWebviewState
       initTarget();
       WidgetsBinding.instance.addPostFrameCallback(_layout);
     }
+  }
+
+  getWebView(){
+    return webView;
   }
 
   void _layout(_) {
@@ -203,13 +189,6 @@ class _InAppWebviewState
                           crossAxisAlignment: CrossAxisAlignment.end,
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: <Widget>[
-                            // Padding(
-                            //     padding: const EdgeInsets.only(bottom: 20.0, right: 30),
-                            //     child:
-                            //     SizedBox(
-                            //         width: 200.0,
-                            //         height: 300.0,
-                            //child:
                             Text(
                               "Tap save on the page of the selected game",
                               style: TextStyle(
@@ -271,8 +250,6 @@ class _InAppWebviewState
     super.dispose();
   }
 
-  //final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
-
   @override
   Widget build(BuildContext context) => FutureBuilder(
       future: sharedPropWrapper.readRegion(),
@@ -281,30 +258,12 @@ class _InAppWebviewState
           return WillPopScope(
               onWillPop: () async => false,
               child: Scaffold(
-                // key: _scaffoldKey,
                 extendBody: true,
                 appBar: PreferredSize(
                     preferredSize: Size.fromHeight(40.0),
-                    // here the desired height
                     child: AppBar(
                       elevation: 0.0,
-                      //brightness: Brightness.light,
                       backgroundColor: Color(0xECF1F1F1),
-                      // title: RichText(
-                      //   text: TextSpan(
-                      //     children: [
-                      //       TextSpan(
-                      //         text: "open game page and then ",
-                      //           style: TextStyle(
-                      //               fontSize: 17)
-                      //       ),
-                      //       WidgetSpan(
-                      //         child: Icon(Icons.save, size: 17),
-                      //       ),
-                      //     ],
-                      //   ),
-                      // ),
-                      //backgroundColor: Colors.black.withOpacity(0.5),
                       leadingWidth: 80,
                       toolbarHeight: 44,
                       leading: TextButton(
@@ -315,25 +274,8 @@ class _InAppWebviewState
                                 fontSize: 17,
                                 color: Color.fromARGB(255, 0, 114, 206))),
                       ),
-                      // leading: GestureDetector(
-                      //   onTap: () => Navigator.of(context).pop(),
-                      //   child:   RichText(
-                      //       text: TextSpan(
-                      //       text: "Done",
-                      //   style: TextStyle(
-                      //       fontSize: 17))
-                      // )),
-                      // IconButton(
-                      //   icon: Icon(Icons.arrow_back),
-                      //   onPressed: () {
-                      //     Navigator.of(context).pop();
-                      //   },
-                      // ),
-                      //title: Text('InAppWebView Example'),
                       centerTitle: true,
                     )),
-                bottomNavigationBar: getBottomLine(),
-                // _buttonBar(context),
                 body: Container(
                     child: showBlankScreen
                         ? Center(
@@ -352,20 +294,15 @@ class _InAppWebviewState
                                     iconSize: 28,
                                     splashColor: Colors.green,
                                     icon: const Icon(Icons.home_rounded),
-                                    //tooltip: 'Increase volume by 10',
                                     onPressed: () {
                                       setState(() {
                                         showBlankScreen = !showBlankScreen;
                                       });
-                                      // setState(() {
-                                      //   _refreshListButton();
-                                      // });
                                     },
                                   )
                                 ])))
                         : Column(children: <Widget>[
                       Container(
-                        // padding: EdgeInsets.all(10.0),
                           child: progress < 1.0
                               ? LinearProgressIndicator(
                             value: progress,
@@ -378,38 +315,16 @@ class _InAppWebviewState
                               : Container()),
                       Container(
                         child: Expanded(
-                          // decoration:
-                          // BoxDecoration(border: Border.all(color: Colors.blueAccent)),
                           child: InAppWebView(
-                            // gestureRecognizers: Set()
-                            //   ..add(Factory<HorizontalDragGestureRecognizer>(
-                            //       () => HorizontalDragGestureRecognizer()
-                            //         ..onUpdate = (details) {
-                            //           int sensitivity = 8;
-                            //           if (details.delta.dx > sensitivity) {
-                            //             print("right");
-                            //             if (webView != null) {
-                            //               webView.goBack();
-                            //             }
-                            //           } else if(details.delta.dx < -sensitivity){
-                            //             if (webView != null) {
-                            //               webView.goBack();
-                            //             }
-                            //             print("left");
-                            //             //Left Swipe
-                            //           }
-                            //         })),
                             key: browserKey,
                             initialUrlRequest: URLRequest(
                                 url: Uri.parse(
                                     'https://store.playstation.com/'
                                         '${snapshot.data}'
                                         '/latest')),
-                            //gestureRecognizers:
                             initialOptions: InAppWebViewGroupOptions(
                                 crossPlatform: InAppWebViewOptions(
                                     useShouldOverrideUrlLoading: true
-                                  //debuggingEnabled: true,
                                 )),
                             onWebViewCreated:
                                 (InAppWebViewController controller) {
@@ -419,16 +334,9 @@ class _InAppWebviewState
                                   url: Uri.parse(
                                       "https://store.playstation.com"),
                                   name: "eucookiepreference",
-                                  value: "accept",
+                                  value: "reject",
                                   domain: ".playstation.com",
                                   isHttpOnly: false);
-                              // controller.addJavaScriptHandler(
-                              //     handlerName: 'handlerFooWithArgs',
-                              //     callback: (args) {
-                              //       //print(args);
-                              //       // it will print: [1, true, [bar, 5], {foo: baz}, {bar: bar_value, baz: baz_value}]
-                              //     }
-                              //     );
                             },
                             onLoadStart:
                                 (InAppWebViewController controller,
@@ -438,14 +346,8 @@ class _InAppWebviewState
                                 setState(() {
                                   showBlankScreen = !showBlankScreen;
                                 });
-                                //return Container();
                               }
                             },
-                            // onLoadStop: (InAppWebViewController controller, Uri uri) async {
-                            //   List<Cookie> cookies = await cookieManager.getCookies(url: uri);
-                            //   print("cookies  $cookies");
-                            // },
-
                             onProgressChanged:
                                 (InAppWebViewController controller,
                                 int progress) {
@@ -457,71 +359,84 @@ class _InAppWebviewState
                         ),
                       ),
                     ])),
+                bottomNavigationBar: MyBottomAppBar(saveAction: saveGame,
+                  getWebViewAction: getWebView,),
               ));
         } else {
           return CircularProgressIndicator();
         }
       });
 
-  Widget getBottomLine() {
-    return BottomAppBar(
-      shape: CircularNotchedRectangle(),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: <Widget>[
-          TextButton(
-            style: TextButton.styleFrom(primary: buttonColor),
-            child: Icon(Icons.arrow_back, size: iconSize),
-            onPressed: () {
-              if (webView != null) {
-                webView.goBack();
-              }
-            },
-          ),
-          TextButton(
-            style: TextButton.styleFrom(primary: buttonColor),
-            child: Icon(Icons.arrow_forward, size: iconSize),
-            onPressed: () {
-              if (webView != null) {
-                webView.goForward();
-              }
-            },
-          ),
-          TextButton(
-            style: TextButton.styleFrom(primary: buttonColor),
-            child: Icon(Icons.refresh, size: iconSize),
-            onPressed: () {
-              if (webView != null) {
-                webView.reload();
-              }
-            },
-          ),
-          TapDebouncer(onTap: () async {
-            //GameAttributes gm;
-            if (webView != null) {
-              //gm = await saveInDb(_prepareAttributes(webView.getUrl()));
-              // Navigator.of(context)
-              //     .pop(_prepareAttributes(webView.getUrl()));
-            }
-            saveGame(webView.getUrl());
-            await Future<void>.delayed(const Duration(milliseconds: 1000));
-          },
-              builder: (BuildContext context, TapDebouncerFunc? onTap) {
-            return TextButton(
-                key: addKey,
-                style: TextButton.styleFrom(primary: buttonColor),
-                child: Icon(Icons.save, size: iconSize),
-                onPressed: onTap);
-          })
-        ],
-      ),
-      color: Colors.white.withOpacity(0.9),
-    );
-  }
+  // Widget getBottomLine() {
+  //   return BottomAppBar(
+  //     shape: CircularNotchedRectangle(),
+  //     child: Row(
+  //       mainAxisSize: MainAxisSize.min,
+  //       mainAxisAlignment: MainAxisAlignment.spaceAround,
+  //       children: <Widget>[
+  //     Expanded(
+  //     child:
+  //         TextButton(
+  //           style: TextButton.styleFrom(primary: buttonColor),
+  //           child: Icon(Icons.arrow_back, size: iconSize),
+  //           onPressed: () {
+  //             if (webView != null) {
+  //               webView.goBack();
+  //             }
+  //           },
+  //         )),
+  //   Expanded(
+  //   child:
+  //         TextButton(
+  //           style: TextButton.styleFrom(primary: buttonColor),
+  //           child: Icon(Icons.arrow_forward, size: iconSize),
+  //           onPressed: () {
+  //             if (webView != null) {
+  //               webView.goForward();
+  //             }
+  //           },
+  //         )),
+  //   Expanded(
+  //   child:
+  //         TextButton(
+  //           style: TextButton.styleFrom(primary: buttonColor),
+  //           child: Icon(Icons.refresh, size: iconSize),
+  //           onPressed: () {
+  //             if (webView != null) {
+  //               webView.reload();
+  //             }
+  //           },
+  //         )),
+  //   Expanded(
+  //   child:
+  //         TapDebouncer(onTap: () async {
+  //           //GameAttributes gm;
+  //           if (webView != null) {
+  //             //gm = await saveInDb(_prepareAttributes(webView.getUrl()));
+  //             // Navigator.of(context)
+  //             //     .pop(_prepareAttributes(webView.getUrl()));
+  //           }
+  //          // saveGame(webView.getUrl());
+  //          // await Future<void>.delayed(const Duration(milliseconds: 1000));
+  //         },
+  //             builder: (BuildContext context, TapDebouncerFunc? onTap) {
+  //           return TextButton(
+  //               key: addKey,
+  //               style: TextButton.styleFrom(primary: buttonColor),
+  //               child:  ButtonSave(saveAction: saveGame),
+  //               onPressed: onTap);
+  //         }))
+  //       ],
+  //     ),
+  //     color: Colors.white.withOpacity(0.9),
+  //   );
+  // }
 
-  saveGame(Future<dynamic> url) async {
+  saveGame() async {
     GameAttributes gm = await _prepareAttributes(await webView.getUrl());
+    if(gm.imgUrl == ""){
+      return;
+    }
     Map details = await getGameInfo(await webView.getUrl());
     if (details['size'] > 1) {
       List<Product> products = (await getOptions(gm))
@@ -566,12 +481,9 @@ class _InAppWebviewState
     Map<String, String> headers = {
       "X-Psn-Store-Locale-Override": await sharedPropWrapper.readRegion()
     };
-    // print(gm.gameId);
     http.Response response = await http.Client()
         .get(Uri.parse(getUrl(gm.gameId, gm.type)), headers: headers);
-    //print(response);
     Game? game = convertToGame(gm);
-    //print(response.body);
     return Future.value(Data.fromJson(response.body, game!));
   }
 
@@ -783,6 +695,9 @@ _getGameImageUrl(Uri? futureUrl) async {
     imgElement = document
         .querySelector('img[data-qa="gameBackgroundImage#tileImage#preview"]');
   }
+  if (imgElement == null) {
+    return "";
+  }
   String imageUrl = imgElement!.attributes['src']!;
   return imageUrl.substring(0, imageUrl.indexOf("?")) + "?w=250";
 }
@@ -809,7 +724,6 @@ _getType(Uri? url) async {
 
 showSaveDialog(var context) {
   showDialog(
-    // context: _scaffoldKey.currentContext,
       context: context,
       barrierColor: Colors.black26,
       builder: (dialogContext) {
@@ -817,9 +731,6 @@ showSaveDialog(var context) {
           Navigator.of(context).pop(true);
         });
         return
-          // new BackdropFilter(
-          //   filter: new ImageFilter.blur(sigmaX: 10.0, sigmaY: 10.0),
-          //   child:
           Dialog(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(0.0)),
@@ -852,18 +763,89 @@ showSaveDialog(var context) {
                       ),
                     ),
                   ),
-                  // Positioned(
-                  //     top: -50,
-                  //     child: CircleAvatar(
-                  //       backgroundColor: Colors.transparent,
-                  //       radius: 50,
-                  //       child: Icon(Icons.save, color: Colors.blue, size: 40,),
-                  //     )
-                  // ),
-                  //)
                 ],
               )
-            //)
           );
       });
+}
+
+class MyBottomAppBar extends StatefulWidget {
+  final Function() saveAction;
+  final Function() getWebViewAction;
+
+  MyBottomAppBar({Key? key, required this.saveAction, required this.getWebViewAction} )
+      : super(key: key);
+
+  @override
+  _MyBottomAppBarState createState() => _MyBottomAppBarState();
+}
+
+class _MyBottomAppBarState extends State<MyBottomAppBar> {
+  bool _isLoading = false;
+
+  void _onButtonPressed() async {
+    setState(() {
+      _isLoading = true;
+    });
+    await widget.saveAction();
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+
+    return Container(
+      //color: Colors.white,
+      child: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: BottomAppBar(
+            color: Colors.white.withOpacity(0.3),
+            child: Row(
+              //mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.arrow_back, size: iconSize, color: buttonColor,),
+                  onPressed: () {
+                    (widget.getWebViewAction() as InAppWebViewController).goBack();
+                  },
+                ),
+                IconButton(
+                  icon: Icon(Icons.arrow_forward, size: iconSize, color: buttonColor,),
+                  onPressed: () {
+                    (widget.getWebViewAction() as InAppWebViewController).goForward();
+                  },
+                ),
+                IconButton(
+                  icon: Icon(Icons.refresh, size: iconSize, color: buttonColor,),
+                  onPressed: () {
+                    (widget.getWebViewAction() as InAppWebViewController).reload();
+                    },
+                ),
+                IconButton(
+                  icon: _isLoading ?
+                  SizedBox(
+                      height: 25.0,
+                      width: 25.0,
+                      child:
+                  CircularProgressIndicator(
+                    color: Colors.blueAccent,
+                    strokeWidth: 3,
+                  ))
+                      : Icon(Icons.add_box_outlined, size: 30 , color: Colors.blueAccent),
+                  onPressed: () {
+                    _onButtonPressed();
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
 }
