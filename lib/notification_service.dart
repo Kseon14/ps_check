@@ -54,8 +54,6 @@ class NotificationService {
 
     const String navigationActionId = 'id_3';
 
-
-
     final InitializationSettings initializationSettings =
     InitializationSettings(
         android: initializationSettingsAndroid,
@@ -93,7 +91,7 @@ class NotificationService {
 
   void showNotification(Data data) async {
     debugPrint('notification payload: start');
-    String text = data.productRetrieve!.name! + " have new price: " +
+    String text = data.productRetrieve!.name! + " has new price: " +
         data.productRetrieve!.webctas![0].price!.discountedPrice!;
     await flutterLocalNotificationsPlugin.show(
         data.hashCode,

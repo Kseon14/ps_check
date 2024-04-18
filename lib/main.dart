@@ -6,6 +6,8 @@ import 'dart:ui';
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:collection/src/iterable_extensions.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -199,10 +201,12 @@ Game? convertToGame(GameAttributes gameAttribute) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   debugPrint("init");
   await hiveWrapper.init();
   await NotificationService().init();
-  Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
+  await Firebase.initializeApp();
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
   if (Platform.isAndroid) {
     Workmanager().registerPeriodicTask(
       "game-checker",
@@ -210,6 +214,7 @@ void main() async {
       frequency: Duration(hours: 12),
     );
   }
+
   runApp(GameChecker());
 }
 
@@ -219,6 +224,7 @@ Future selectNotification(String payload) async {
   }
 }
 
+@pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     debugPrint('notification payload: $task');
@@ -282,10 +288,39 @@ class GameChecker extends StatefulWidget {
   _GameCheckerState createState() => _GameCheckerState();
 }
 
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("Handling a background message: ${message.messageId}");
+}
+
+Future<void> backgroundMessageHandler(RemoteMessage message) async {
+  if (message.data.isNotEmpty) {
+    var taskType = message.data['task'];
+    if (taskType == 'update_data') {
+      // Perform your data fetching task
+      print("Handling a background message: ${message.messageId}");
+    }
+  }
+}
+
+
 class _GameCheckerState extends State<GameChecker> {
   @override
   void initState() {
     super.initState();
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null) {
+        // Handle the initial message
+      }
+    });
+
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      // Handle foreground messages
+    });
+
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      // Handle a message that opened the app from the background
+    });
     theme.addListener(() {
       refresh();
     });
@@ -330,13 +365,14 @@ class _GameCheckerState extends State<GameChecker> {
           //Brightness.dark, //navigation bar icon
           ));
     }
+
     return MaterialApp(
       initialRoute: '/',
       routes: {
         '/': (context) => GameCheckerMain(
             show: sharedPropWrapper.readTutorialFlagMain(),
             notifyParent: refresh),
-        '/webView': (context) => InAppWebview(),
+        '/webView': (context) => GameBrowsingScreen('BASE_URL'),
       },
       theme: ThemeData(
           brightness: Brightness.light,
@@ -403,6 +439,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
       },
       onSkip: () {
         debugPrint("skip");
+        return true;
       },
       onClickOverlay: (target) {
         debugPrint('onClickOverlay: $target');
@@ -549,16 +586,16 @@ class _GameCheckerMainState extends State<GameCheckerMain>
     return getLocations().indexWhere((region) => region.name == name);
   }
 
-  _showPicker() async {
+  _bottomRegionSelection() async {
     debugPrint("picker");
     showModalBottomSheet(
-        backgroundColor: Colors.white.withOpacity(0.5),
+        backgroundColor: Colors.white.withOpacity(1),
         context: context,
         builder: (BuildContext context) {
           return Container(
               height: 200,
               child: CupertinoPicker(
-                //backgroundColor: Colors.transparent,
+                  //backgroundColor: Colors.white.withOpacity(0.6),
                 //backgroundColor: Theme.of(context).primaryColor,
                   magnification: 1.2,
                   onSelectedItemChanged: (index) {
@@ -571,7 +608,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                       .map((region) =>
                   new Text(
                     region.name,
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: Colors.black),
                   ))
                       .toList()));
         }).then((value) {
@@ -590,7 +627,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   _showModalSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white.withOpacity(0.5),
       barrierColor: Colors.transparent,
       builder: (context) {
         return Container(
@@ -635,7 +672,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                               child: Column(
                                 children: [
                                   GestureDetector(
-                                      onTap: () => _showPicker(),
+                                      onTap: () => _bottomRegionSelection(),
                                       child: Row(
                                           mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
@@ -704,13 +741,15 @@ class _GameCheckerMainState extends State<GameCheckerMain>
             parent: AlwaysScrollableScrollPhysics()),
         slivers: <Widget>[
           SliverAppBar(
-            expandedHeight: 25.0,
-            floating: false,
+            toolbarHeight: 44,
+            //collapsedHeight: 20,
+            //expandedHeight: 50.0,
+           floating: true,
             pinned: true,
             snap: false,
             elevation: 0,
             forceElevated: true,
-            backgroundColor: Colors.white.withOpacity(0.3),
+            backgroundColor: Colors.white.withOpacity(0.6),
             leading: GestureDetector(
               key: settingKey,
               onTap: () {
@@ -767,7 +806,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                 if (snapshot.hasData && snapshot.data!.isNotEmpty) {
                   debugPrint('show list');
                   return SliverPadding(
-                      padding: const EdgeInsets.only(bottom: 12, top: 16),
+                      padding: const EdgeInsets.only(bottom: 12, top: 13),
                       sliver: GamesList(
                         data: snapshot.data ?? [],
                         notifyParent: widget.notifyParent,
