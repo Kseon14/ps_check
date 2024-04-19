@@ -164,7 +164,7 @@ class _SearchScreenState extends State<SearchScreen> {
         height: bottomHeight,
         color: MediaQuery.of(context).viewInsets.bottom == 0
             ? Color(0xECF1F1F1)
-            : Color(0xECD2D4D9), //Color(0xff003697),
+            : Color.fromRGBO(210, 212, 217, 1), //Color(0xff003697),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
