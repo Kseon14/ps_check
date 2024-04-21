@@ -38,9 +38,6 @@ class NotificationService {
 
   Future<void> init() async {
 
-    final AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
-
     final DarwinInitializationSettings initializationSettingsIOS =
     DarwinInitializationSettings(
       requestSoundPermission: true,
@@ -56,7 +53,7 @@ class NotificationService {
 
     final InitializationSettings initializationSettings =
     InitializationSettings(
-        android: initializationSettingsAndroid,
+        android: null,
         iOS: initializationSettingsIOS,
         macOS: null);
     await flutterLocalNotificationsPlugin.initialize(initializationSettings,
@@ -123,7 +120,6 @@ class NotificationService {
   void handleApplicationWasLaunchedFromNotification() async {
     final NotificationAppLaunchDetails? notificationAppLaunchDetails =
     await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
-
   }
 
   Data getGaFromJson(String payload) {

@@ -411,7 +411,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
     var paddingWidth = screenWidth * 0.01;
     var paddingHeight = screenWidth * 0.012;
     var mainTextSize = screenHeight * 0.019;
-    var auxiliaryTextSize = screenHeight * 0.015;
+    var auxiliaryTextSize = screenHeight * 0.0135;
 
     var platformWidth = screenWidth * 0.08;
     var priceWidth =
@@ -521,8 +521,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
                             MediaQuery.of(context).size.width * 0.012),
                         child: Container(
                             width: sizes.platformWidth,
-                            child: Align(
-                              alignment: Alignment.center,
+                            child: Center(
                               child: Text(products[index].platforms!.join('\n'),
                                   style: TextStyle(
                                       fontSize: sizes.auxiliaryTextSize),

@@ -207,14 +207,6 @@ void main() async {
   await NotificationService().init();
   await Firebase.initializeApp();
   Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
-  if (Platform.isAndroid) {
-    Workmanager().registerPeriodicTask(
-      "game-checker",
-      "getUpdateForPrice",
-      frequency: Duration(hours: 12),
-    );
-  }
-
   runApp(GameChecker());
 }
 
