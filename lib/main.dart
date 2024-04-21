@@ -20,9 +20,9 @@ import 'package:ps_check/model.dart';
 import 'package:ps_check/notification_service.dart';
 import 'package:ps_check/spw.dart';
 import 'package:ps_check/theme.dart';
+import 'package:ps_check/tutorialManager.dart';
 import 'package:ps_check/web-b.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import 'package:workmanager/workmanager.dart';
 import 'browser2.dart';
 import 'hive_wrapper.dart';
@@ -41,7 +41,7 @@ var cacheExtentSize = 2000.0;
 var host = "https://web.np.playstation.com";
 
 GlobalKey settingKey = GlobalKey();
-GlobalKey addKey = GlobalKey();
+GlobalKey addKeyMain = GlobalKey();
 GlobalKey addKey2 = GlobalKey();
 GlobalKey listViewKey = GlobalKey();
 
@@ -408,115 +408,14 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   FixedExtentScrollController? firstController;
   int? index;
 
-  final List<TargetFocus> targets = <TargetFocus>[];
-
   _startTutorial(Future<dynamic> show) async {
     if (!await show) {
-      initTarget();
-      WidgetsBinding.instance.addPostFrameCallback(_layout);
+      var tutorialManager = TutorialManager(
+        context: context,
+        sharedPropWrapper: sharedPropWrapper, // Ensure you have this class defined
+      );
+      tutorialManager.startMainTutorial();
     }
-  }
-
-  void _layout(_) async {
-    Future.delayed(Duration(milliseconds: 100));
-    debugPrint("tutorial");
-    showTutorial();
-  }
-
-  void showTutorial() async {
-    TutorialCoachMark(
-      targets: targets,
-      colorShadow: Colors.pink,
-      textSkip: "SKIP",
-      paddingFocus: 10,
-      opacityShadow: 0.8,
-      onFinish: () {
-        sharedPropWrapper.saveTutorialFlagMain(true);
-        debugPrint("finish");
-      },
-      onClickTarget: (target) {
-        debugPrint('onClickTarget: $target');
-      },
-      onSkip: () {
-        debugPrint("skip");
-        return true;
-      },
-      onClickOverlay: (target) {
-        debugPrint('onClickOverlay: $target');
-      },
-    )
-      ..show(context: context);
-  }
-
-  initTarget() {
-    targets.add(
-      TargetFocus(
-        identify: "Setting region",
-        keyTarget: settingKey,
-        color: Colors.red,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.bottom,
-            child: Container(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    "Select your region",
-                    style: TextStyle(
-                      //fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontSize: 20.0),
-                  ),
-                  SizedBox(
-                    width: 200.0,
-                    height: 300.0,
-                    child: Text(
-                      "Base on this selection ps store will show regional site, "
-                          "games and price",
-                      style: TextStyle(color: Colors.white, fontSize: 15.0),
-                    ),
-                  )
-                ],
-              ),
-            ),
-          )
-        ],
-        //shape: ShapeLightFocus.RRect,
-        radius: 5,
-      ),
-    );
-    targets.add(
-      TargetFocus(
-        identify: "Add game",
-        keyTarget: addKey,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-              align: ContentAlign.bottom,
-              child: Container(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    SizedBox(
-                        width: 200.0,
-                        height: 300.0,
-                        child: Text(
-                          "Click here to start game selection",
-                          style: TextStyle(
-                            //fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontSize: 20.0),
-                        )),
-                  ],
-                ),
-              ))
-        ],
-      ),
-    );
   }
 
   @override
@@ -731,7 +630,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
 
   @override
   Widget build(BuildContext context) {
-    debugPrint("_GameCheckerMainState");
+  // debugPrint("_GameCheckerMainState");
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -762,7 +661,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
               Padding(
                   padding: EdgeInsets.only(right: 20.0),
                   child: GestureDetector(
-                    key: addKey,
+                    key: addKeyMain,
                     onTap: () async {
                       await Navigator.of(context).pushNamed('/webView');
                       widget.notifyParent();
@@ -773,28 +672,20 @@ class _GameCheckerMainState extends State<GameCheckerMain>
             ],
             flexibleSpace: ClipRect(
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 13, sigmaY: 13),
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: FlexibleSpaceBar(
                   titlePadding: const EdgeInsets.all(0.0),
                 ),
               ),
             ),
           ),
-          //CupertinoSliverNavigationBar(largeTitle: Text("Pull to refresh")),
-          // 5 - 1000
-          //10 - 2000
-          //20 - 3000
           CupertinoSliverRefreshControl(
             onRefresh: () async {
               await Future.delayed(Duration(milliseconds: min((dataLength*200).floor(), 3000)));
-              print("onRefresh");
-              print("$dataLength");
-              print(min((dataLength*200).floor(), 3000));
-              // monitor network fetch
-              //await Future.delayed(Duration(milliseconds: 1000));
-              // if failed,use refreshFailed()
+              //print("onRefresh");
+              //print("$dataLength");
+              //print(min((dataLength*200).floor(), 3000));
               await widget.notifyParent();
-              //refreshListButton();
               refreshController.refreshCompleted();
             },
           ),

@@ -12,7 +12,7 @@ import 'package:ps_check/bottomModalSize.dart';
 import 'package:ps_check/ga.dart';
 import 'package:ps_check/search.dart';
 import 'package:ps_check/spw.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
+import 'package:ps_check/tutorialManager.dart';
 
 import 'hive_wrapper.dart';
 import 'main.dart';
@@ -27,6 +27,7 @@ var sharedPropWrapper = SharedPropWrapper.instance();
 GlobalKey doneKey = GlobalKey();
 GlobalKey addKey = GlobalKey();
 GlobalKey browserKey = GlobalKey();
+GlobalKey searchKey = GlobalKey();
 
 class GameBrowsingScreen extends StatefulWidget {
   final url;
@@ -41,7 +42,6 @@ class GameBrowsingScreen extends StatefulWidget {
 class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
   var _url;
   late FToast fToast;
-  late TutorialCoachMark tutorialCoachMark;
 
   _GameBrowsingScreenState(this._url);
 
@@ -103,160 +103,17 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
 
   _startTutorial() async {
     if (!await sharedPropWrapper.readTutorialFlagWeb()) {
-      initTarget();
-      WidgetsBinding.instance.addPostFrameCallback(_layout);
+      var tutorialManager = TutorialManager(
+        context: context,
+        sharedPropWrapper:
+            sharedPropWrapper, // Ensure you have this class defined
+      );
+      tutorialManager.startWebTutorial();
     }
   }
 
   getWebView() {
     return webView;
-  }
-
-  void _layout(_) {
-    Future.delayed(Duration(milliseconds: 100));
-    showTutorial();
-  }
-
-  List<TargetFocus> targets = [];
-
-  void showTutorial() {
-    tutorialCoachMark = TutorialCoachMark(
-      targets: targets,
-      colorShadow: Colors.pink,
-      textSkip: "SKIP",
-      paddingFocus: 10,
-      opacityShadow: 0.8,
-      onFinish: () {
-        sharedPropWrapper.saveTutorialFlagWeb(true);
-        print("finish");
-      },
-      onClickTarget: (target) {
-        print('onClickTarget: $target');
-      },
-      onSkip: () {
-        print("skip");
-        return true;
-      },
-      onClickOverlay: (target) {
-        print('onClickOverlay: $target');
-      },
-    )..show(context: context);
-  }
-
-  Offset getPosition() {
-    return Offset(0, 100);
-  }
-
-  initTarget() {
-    targets.add(
-      TargetFocus(
-        identify: "find game",
-        targetPosition: TargetPosition(Size(700, 400), getPosition()),
-        //keyTarget: browserKey,
-        color: Colors.purple,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.bottom,
-            child: Container(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                //mainAxisAlignment: MainAxisAlignment.center,
-                children: <Widget>[
-                  SizedBox(
-                      width: 200.0,
-                      height: 300.0,
-                      child: Text(
-                        "Find the page of the game you want to track",
-                        style: TextStyle(
-                            //fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            fontSize: 20.0),
-                      )),
-                ],
-              ),
-            ),
-          )
-        ],
-        shape: ShapeLightFocus.RRect,
-        radius: 0,
-      ),
-    );
-    targets.add(
-      TargetFocus(
-        identify: "Add game",
-        keyTarget: addKey,
-        alignSkip: Alignment.topRight,
-        enableOverlayTab: true,
-        color: Colors.green,
-        contents: [
-          TargetContent(
-              align: ContentAlign.top,
-              child: Container(
-                  child: new Align(
-                      alignment: FractionalOffset.bottomRight,
-                      child: SizedBox(
-                        width: 200.0,
-                        height: 300.0,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: <Widget>[
-                            Text(
-                              "Tap save on the page of the selected game",
-                              style: TextStyle(
-                                  //fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  fontSize: 20.0),
-                              // )
-                            ),
-                            Text(
-                              "If the page contains multiple game cards, "
-                              "a pop-up window with a selection of games will appear",
-                              style: TextStyle(
-                                  color: Colors.white, fontSize: 15.0),
-                            ),
-                          ],
-                        ),
-                      ))))
-        ],
-      ),
-    );
-    targets.add(
-      TargetFocus(
-        identify: "Done",
-        keyTarget: doneKey,
-        alignSkip: Alignment.bottomRight,
-        enableOverlayTab: true,
-        color: Colors.cyan,
-        contents: [
-          TargetContent(
-              align: ContentAlign.bottom,
-              child: Container(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: <Widget>[
-                    SizedBox(
-                        width: 200.0,
-                        height: 300.0,
-                        child: Padding(
-                            padding: const EdgeInsets.only(top: 30.0, left: 30),
-                            child: Text(
-                              "Click here to get back to list of selected games",
-                              style: TextStyle(
-                                  //fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                  fontSize: 20.0),
-                            ))),
-                  ],
-                ),
-              ))
-        ],
-      ),
-    );
   }
 
   @override
@@ -278,7 +135,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
                     child: AppBar(
                       elevation: 0.0,
                       backgroundColor: Color(0xECF1F1F1),
-                      leadingWidth: 80,
+                      leadingWidth: 70,
                       toolbarHeight: 44,
                       leading: TextButton(
                         key: doneKey,
@@ -293,6 +150,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
                         Padding(
                             padding: EdgeInsets.only(right: 20.0),
                             child: GestureDetector(
+                              key: searchKey,
                               onTap: () async {
                                 final result = await Navigator.push(
                                   context,
@@ -522,17 +380,6 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
     return textPainter.size;
   }
 
-  static int roundUpAbsolute(double number) {
-    return number.isNegative ? number.floor() : number.ceil();
-  }
-
-  // getWidth(List<Product> products) {
-  //   return products.map((product)  {
-  //     var widthList = calcTextSize(product.webctas![0].price!.basePrice!, TextStyle(fontSize: 16)).width;
-  //    return widthList;}
-  //   ).reduce(max)+8;
-  // }
-
   static double getColumnWidth(List<Product> products, double mainTextSize) {
     var textWidth = 0.0;
     products.forEach((pr) {
@@ -561,35 +408,40 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
     // 10, 70, 20
     var screenWidth = MediaQuery.of(context).size.width;
     var screenHeight = MediaQuery.of(context).size.height;
-    var padding = MediaQuery.of(context).size.width * 0.01;
+    var paddingWidth = screenWidth * 0.01;
+    var paddingHeight = screenWidth * 0.012;
     var mainTextSize = screenHeight * 0.019;
     var auxiliaryTextSize = screenHeight * 0.015;
-    var platformWidth = screenWidth * 0.1 + (padding * 2) / 2;
 
-    var priceWidth = getColumnWidth(products, mainTextSize) + (padding * 2);
-    var nameWidth = screenWidth -
-        platformWidth -
-        priceWidth -
-        (padding * 2) -
-        MediaQuery.of(context).size.width * 0.02;
+    var platformWidth = screenWidth * 0.08;
+    var priceWidth =
+        getColumnWidth(products, mainTextSize) + (paddingWidth * 2);
+    var nameWidth =
+        screenWidth - platformWidth - priceWidth - (paddingWidth * 6);
 
     double height = 0.0;
 
     products.forEach((pr) {
-      var platformHeight = calcTextSize(pr.platforms!.first,
-                      TextStyle(fontSize: auxiliaryTextSize))
-                  .height *
-              pr.platforms!.length +
-          (padding * (pr.platforms!.length + 1));
-      var rowCount =
-          getTextLinesCount(pr, mainTextSize, nameWidth - (padding * 2));
+      var platformTextHeight = calcTextSize(
+              pr.platforms!.first, TextStyle(fontSize: auxiliaryTextSize))
+          .height;
+      var spaceBetweenPlatformText = pr.platforms!.length > 1
+          ? (platformTextHeight * 1.2) - platformTextHeight
+          : 0;
+      var platformHeight = (platformTextHeight * pr.platforms!.length +
+          spaceBetweenPlatformText);
+
+      var nameRowCount = getTextLinesCount(pr, mainTextSize, nameWidth);
       var textHeight =
           calcTextSize(pr.name!, TextStyle(fontSize: mainTextSize)).height;
-      if (rowCount > 1) {
-        height = height + (rowCount * textHeight) + (padding * (rowCount + 1));
+
+      if (nameRowCount > 1) {
+        // var spaceBetweenNameText = ((textHeight * 1.2) - textHeight) * (nameRowCount -1);
+        height = height + (nameRowCount * textHeight) + (paddingHeight * 2);
       } else {
-        height =
-            height + (pr.platforms!.length > 1 ? platformHeight : textHeight);
+        height = height +
+            (pr.platforms!.length > 1 ? platformHeight : textHeight) +
+            (paddingHeight * 2);
       }
     });
     print('#####');
@@ -600,7 +452,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
       height: height + MediaQuery.of(context).size.width * 0.2,
       auxiliaryTextSize: auxiliaryTextSize,
       mainTextSize: mainTextSize,
-      platformWidth: platformWidth,
+      platformWidth: platformWidth + paddingWidth,
       nameWidth: nameWidth,
       priceWidth: priceWidth,
     );
@@ -619,85 +471,89 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
               child: Column(
                 children: [
                   Expanded(
-                    child: ListView.builder(
-                        scrollDirection: Axis.vertical,
-                        shrinkWrap: true,
-                        // Change divider color and height as needed
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        itemCount: products.length,
-                        itemBuilder: (BuildContext c, int index) {
-                          return GestureDetector(
-                              onTap: () async {
-                                if (products[index].isSelected!) {
-                                  await hiveWrapper
-                                      .removeFromDb(products[index].id!);
-                                } else {
-                                  await saveInDb(_prepareAttributesFromProduct(
-                                      products[index]));
-                                }
-                                myState(() {
-                                  products[index].isSelected =
-                                      !products[index].isSelected!;
-                                });
-                              },
-                              child: Container(
-                                decoration: products[index].isSelected!
-                                    ? BoxDecoration(
-                                        color: Colors.lightBlue,
-                                      )
-                                    : BoxDecoration(
-                                        color: Colors.white,
-                                      ),
-                                padding: EdgeInsets.symmetric(
-                                    vertical: 5, horizontal: 3),
-                                child: Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: <Widget>[
-                                    Container(
-                                        width: sizes.platformWidth,
-                                        //padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.01),
-                                        child: Align(
-                                          alignment: Alignment.center,
-                                          child: Text(
-                                              products[index]
-                                                  .platforms!
-                                                  .join('\n'),
-                                              style: TextStyle(
-                                                  fontSize:
-                                                      sizes.auxiliaryTextSize),
-                                              textAlign: TextAlign.center),
-                                        )),
-                                    Container(
-                                      width: sizes.nameWidth,
-                                      padding: EdgeInsets.only(
-                                          right: MediaQuery.of(context)
-                                                  .size
-                                                  .width *
-                                              0.02),
-                                      child: Text(products[index].name!,
-                                          style: TextStyle(
-                                              fontSize: sizes.mainTextSize)),
-                                    ),
-                                    Container(
-                                      width: sizes.priceWidth,
-                                      child: Text(
-                                          products[index]
-                                              .webctas![0]
-                                              .price!
-                                              .basePrice!,
-                                          style: TextStyle(
-                                              fontSize: sizes.mainTextSize)),
-                                    ),
-                                  ],
-                                ),
-                              ));
-                        }),
+                    child: getOptionsListForBottom(
+                        products, myState, context, sizes),
                   )
                 ],
               ),
             );
           });
+        });
+  }
+
+  ListView getOptionsListForBottom(List<Product> products, StateSetter myState,
+      BuildContext context, BottomModalSize sizes) {
+    return ListView.builder(
+        scrollDirection: Axis.vertical,
+        shrinkWrap: true,
+        // Change divider color and height as needed
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: products.length,
+        itemBuilder: (BuildContext c, int index) {
+          return GestureDetector(
+              onTap: () async {
+                if (products[index].isSelected!) {
+                  await hiveWrapper.removeFromDb(products[index].id!);
+                } else {
+                  await saveInDb(
+                      _prepareAttributesFromProduct(products[index]));
+                }
+                myState(() {
+                  products[index].isSelected = !products[index].isSelected!;
+                });
+              },
+              child: Container(
+                decoration: products[index].isSelected!
+                    ? BoxDecoration(
+                        color: Colors.lightBlue,
+                      )
+                    : BoxDecoration(
+                        color: Colors.white,
+                      ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: <Widget>[
+                    Padding(
+                        padding: EdgeInsets.fromLTRB(
+                            MediaQuery.of(context).size.width * 0.01,
+                            MediaQuery.of(context).size.width * 0.012,
+                            0,
+                            MediaQuery.of(context).size.width * 0.012),
+                        child: Container(
+                            width: sizes.platformWidth,
+                            child: Align(
+                              alignment: Alignment.center,
+                              child: Text(products[index].platforms!.join('\n'),
+                                  style: TextStyle(
+                                      fontSize: sizes.auxiliaryTextSize),
+                                  textAlign: TextAlign.center),
+                            ))),
+                    Padding(
+                        padding: EdgeInsets.fromLTRB(
+                            MediaQuery.of(context).size.width * 0.01,
+                            MediaQuery.of(context).size.width * 0.012,
+                            MediaQuery.of(context).size.width * 0.01,
+                            MediaQuery.of(context).size.width * 0.012),
+                        child: Container(
+                          width: sizes.nameWidth,
+                          child: Text(products[index].name!,
+                              style: TextStyle(fontSize: sizes.mainTextSize)),
+                        )),
+                    Padding(
+                        padding: EdgeInsets.fromLTRB(
+                            0,
+                            MediaQuery.of(context).size.width * 0.012,
+                            MediaQuery.of(context).size.width * 0.01,
+                            MediaQuery.of(context).size.width * 0.012),
+                        child: Container(
+                          width: sizes.priceWidth,
+                          child: Text(
+                              products[index].webctas![0].price!.basePrice!,
+                              style: TextStyle(fontSize: sizes.mainTextSize)),
+                        )),
+                  ],
+                ),
+              ));
         });
   }
 }

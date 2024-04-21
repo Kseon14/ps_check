@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:html/parser.dart';
 import 'package:ps_check/searchResult.dart';
@@ -95,6 +96,7 @@ class _SearchScreenState extends State<SearchScreen> {
     var bottomHeight = MediaQuery.of(context).viewInsets.bottom == 0
         ? screenHeight * 0.09
         : screenHeight * 0.055;
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -126,8 +128,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       color: _selectedIdx == index
                           ? Colors.blueAccent
                           : Colors.transparent,
-                      padding: EdgeInsets.symmetric(vertical: 0, horizontal: 0),
-                      // Reduced vertical padding
+                      //padding: EdgeInsets.symmetric(vertical: 0, horizontal: 0),
                       child: GestureDetector(
                         child: Padding(
                             padding: EdgeInsets.fromLTRB(15, 10, 7, 7),
@@ -153,35 +154,37 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ],
           )),
-      bottomSheet:
-          // AnimatedSize(
-          //   // vsync: this,
-          //     duration: Duration(seconds: 1),
-          //     curve: Curves.easeIn,
-          //     alignment: Alignment.bottomCenter,
-          //     child:
-          Container(
+      bottomSheet: AnimatedContainer(
+        duration: const Duration(milliseconds: 700),
+        curve: Curves.linear,
         height: bottomHeight,
         color: MediaQuery.of(context).viewInsets.bottom == 0
             ? Color(0xECF1F1F1)
-            : Color.fromRGBO(210, 212, 217, 1), //Color(0xff003697),
+            : Color.fromRGBO(210, 212, 217, 1),
+        //Color(0xff003697),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
-            Padding(
+            AnimatedPadding(
               padding: EdgeInsets.fromLTRB(10, 5, 10,
                   MediaQuery.of(context).viewInsets.bottom == 0 ? 40 : 5),
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeInOut,
               child: Container(
                 width: screenWidth * 0.8,
                 height: screenHeight * 0.040,
                 child: TextField(
+                  textAlignVertical: TextAlignVertical.center,
                   focusNode: _focusNode,
                   style: TextStyle(
                       fontSize: screenHeight * 0.020,
                       height: 1,
                       color: Colors.black),
-                  textInputAction: TextInputAction.search,
+                  textInputAction: TextInputAction.done,
                   decoration: InputDecoration(
+                    isCollapsed: true,
+                    //contentPadding: const EdgeInsets.all(0.5),
+
                     prefixIcon: Icon(Icons.search, color: Colors.black),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(5),
