@@ -206,7 +206,7 @@ void main() async {
   await hiveWrapper.init();
   await NotificationService().init();
   await Firebase.initializeApp();
-  Workmanager().initialize(callbackDispatcher, isInDebugMode: true);
+  Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
   runApp(GameChecker());
 }
 
@@ -359,6 +359,7 @@ class _GameCheckerState extends State<GameChecker> {
     }
 
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       initialRoute: '/',
       routes: {
         '/': (context) => GameCheckerMain(

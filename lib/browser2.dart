@@ -8,8 +8,6 @@ class WebViewContainer extends StatefulWidget {
 
   @override
   createState() => _WebViewContainerState(this.url);
-
-
 }
 
 class _WebViewContainerState extends State<WebViewContainer> {
@@ -17,22 +15,16 @@ class _WebViewContainerState extends State<WebViewContainer> {
   InAppWebViewController? _webViewController;
   double progress = 0;
 
-  //inapp.CookieManager cookieManager = inapp.CookieManager.instance();
   final cookieManager1 = CookieManager.instance();
 
   _WebViewContainerState(this._url);
 
-  // Future<void> deleteAllCookies() async {
-  //   await cookieManager1.deleteAllCookies();
-  // }
 
   @override
   void initState() {
     super.initState();
-   // deleteAllCookies();
-   // setCookie();
-    //setCookie2();
   }
+
   void clearCookies() async {
     var cookieManager = CookieManager.instance();
     await cookieManager.deleteAllCookies(); // This deletes all cookies
@@ -52,7 +44,6 @@ class _WebViewContainerState extends State<WebViewContainer> {
 
 
   void setCookie2() async {
-   // await cookieManager1.removeSessionCookies();
     await cookieManager1.setCookie(
       url: WebUri('https://store.playstation.com'),
       name: "eucookiepreference",
@@ -61,22 +52,6 @@ class _WebViewContainerState extends State<WebViewContainer> {
       isSecure: true,
     );
   }
-
-  //void setCookie() async {
-
-  //   await cookieManager.setCookie(
-  //       url: Uri.parse("https://store.playstation.com"),
-  //       name: "eucookiepreference",
-  //       value: "reject",
-  //       domain: ".playstation.com",
-  //       isHttpOnly: false,
-  //       path: "/",
-  //       sameSite: inapp.HTTPCookieSameSitePolicy.NONE,
-  //       expiresDate: DateTime
-  //           .now()
-  //           .add(Duration(days: 7))
-  //           .millisecondsSinceEpoch ~/ 1000);
-  // }
 
   @override
   Widget build(BuildContext context) {
@@ -113,12 +88,10 @@ class _WebViewContainerState extends State<WebViewContainer> {
                 child: InAppWebView(
                   initialUrlRequest: URLRequest(url: WebUri(_url)),
                   initialSettings: InAppWebViewSettings(
-                  //  useShouldOverrideUrlLoading: true,
                       allowsBackForwardNavigationGestures: true
                   ),
                   onWebViewCreated: (controller) async {
                     _webViewController = controller;
-                   // _webViewController?.clearCache();
                    },
                   onProgressChanged:
                       (InAppWebViewController controller, int progress) {
