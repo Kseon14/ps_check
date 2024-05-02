@@ -3,18 +3,16 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
-import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:collection/src/iterable_extensions.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_app_badger/flutter_app_badger.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:http/http.dart' as http;
+import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:ps_check/ga.dart';
 import 'package:ps_check/model.dart';
 import 'package:ps_check/notification_service.dart';
@@ -24,7 +22,7 @@ import 'package:ps_check/tutorialManager.dart';
 import 'package:ps_check/web-b.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:workmanager/workmanager.dart';
-import 'browser2.dart';
+import 'gameList.dart';
 import 'hive_wrapper.dart';
 
 
@@ -38,14 +36,28 @@ var imageWidth = 95.0;
 var imageHeight = 135.0;
 var cacheExtentSize = 2000.0;
 //var host = "http://localhost:9595";
+//var host = "http://192.168.1.2:9595";
 var host = "https://web.np.playstation.com";
+
+// const MethodChannel _backgroundChannel = MethodChannel('com.psCheck.backgroundTaskFetch');
 
 GlobalKey settingKey = GlobalKey();
 GlobalKey addKeyMain = GlobalKey();
 GlobalKey addKey2 = GlobalKey();
 GlobalKey listViewKey = GlobalKey();
+bool isRefreshing = false;
 
 final GlobalKey<AnimatedListState> listKey = GlobalKey();
+
+// class FlutterBackgroundChannel {
+//   static Future<void> invokeMethod(String method, [dynamic arguments]) async {
+//     try {
+//       await _backgroundChannel.invokeMethod(method, arguments);
+//     } catch (e) {
+//       print('Error invoking method: $e');
+//     }
+//   }
+// }
 
 Future<List<Data?>> fetchDataV2(bool fromNotification) async {
   isActionInProgress = true;
@@ -76,7 +88,7 @@ Future<List<Data?>> fetchDataV2(bool fromNotification) async {
       }
 
       if (!fromNotification) {
-        if (_isDiscountExist(data.productRetrieve!) &
+        if (isDiscountExist(data.productRetrieve!) &
             await isPriceLessThenSaved(data, gm)) {
           gm.discountedValue =
               data.productRetrieve!.webctas![0].price?.discountedValue;
@@ -95,25 +107,33 @@ Future<List<Data?>> fetchDataV2(bool fromNotification) async {
         b!.productRetrieve!.webctas!.isEmpty) {
       return 0;
     }
-    if (a.productRetrieve!.webctas![0].price!.discountedValue == null &&
-        b.productRetrieve!.webctas![0].price!.discountedValue == null) {
+    var aPrice = a.productRetrieve!.webctas![0].price!.discountedValue;
+    var bPrice = b.productRetrieve!.webctas![0].price!.discountedValue;
+    if (aPrice == null &&
+        bPrice == null) {
       return 0;
     }
-    if (a.productRetrieve!.webctas![0].price!.discountedValue == null) {
+    if (aPrice == null) {
       return 1;
     }
-    if (b.productRetrieve!.webctas![0].price!.discountedValue == null) {
+    if (bPrice == null) {
       return -1;
     }
-    return a.productRetrieve!.webctas![0].price!.discountedValue!
-        .compareTo(b.productRetrieve!.webctas![0].price!.discountedValue!);
+    if (aPrice == 0) {
+      aPrice = a.productRetrieve!.webctas![0].price!.basePriceValue!;
+    }
+    if (bPrice == 0) {
+      bPrice = b.productRetrieve!.webctas![0].price!.basePriceValue!;
+    }
+    return aPrice
+        .compareTo(bPrice);
   });
   dataLength = dates.length;
   isActionInProgress = false;
   return dates;
 }
 
-_isDiscountExist(ProductRetrieve productRetrieve) {
+isDiscountExist(ProductRetrieve productRetrieve) {
   if(productRetrieve.webctas!.isEmpty) {
     return false;
   }
@@ -295,7 +315,6 @@ Future<void> backgroundMessageHandler(RemoteMessage message) async {
   }
 }
 
-
 class _GameCheckerState extends State<GameChecker> {
   @override
   void initState() {
@@ -429,6 +448,11 @@ class _GameCheckerMainState extends State<GameCheckerMain>
         await hiveWrapper.close();
         await hiveWrapper.init();
         debugPrint("state: resumed");
+        //setState(() {
+        isRefreshing = true;
+          widget.notifyParent();
+       // });
+
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -620,6 +644,8 @@ class _GameCheckerMainState extends State<GameCheckerMain>
 
   GlobalKey refreshKey = GlobalKey();
   RefreshController refreshController = RefreshController(initialRefresh: false);
+  // Add a separate state for refresh loading
+
 
   @override
   Widget build(BuildContext context) {
@@ -639,8 +665,8 @@ class _GameCheckerMainState extends State<GameCheckerMain>
            floating: true,
             pinned: true,
             snap: false,
-            elevation: 0,
-            forceElevated: true,
+            //elevation: 0,
+           // forceElevated: true,
             backgroundColor: Colors.white.withOpacity(0.6),
             leading: GestureDetector(
               key: settingKey,
@@ -657,6 +683,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                     key: addKeyMain,
                     onTap: () async {
                       await Navigator.of(context).pushNamed('/webView');
+                      isRefreshing = true;
                       widget.notifyParent();
                     },
                     child: Icon(Icons.add,
@@ -674,10 +701,8 @@ class _GameCheckerMainState extends State<GameCheckerMain>
           ),
           CupertinoSliverRefreshControl(
             onRefresh: () async {
-              await Future.delayed(Duration(milliseconds: min((dataLength*200).floor(), 3000)));
-              //print("onRefresh");
-              //print("$dataLength");
-              //print(min((dataLength*200).floor(), 3000));
+                isRefreshing = true;
+                await Future.delayed(Duration(milliseconds: min((dataLength*200).floor(), 3000)));
               await widget.notifyParent();
               refreshController.refreshCompleted();
             },
@@ -686,9 +711,28 @@ class _GameCheckerMainState extends State<GameCheckerMain>
           FutureBuilder<List<Data?>>(
               future: fetchDataV2(false),
               builder: (context, snapshot) {
-                if (snapshot.hasError) print(snapshot.error);
+                if (!isRefreshing && snapshot.connectionState == ConnectionState.waiting) {
+                  isRefreshing = false;
+                    // Show a spinner while data is loading
+                    return SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: LoadingAnimationWidget.staggeredDotsWave(
+                            color: Colors.blue,
+                            size: 35,
+                          ), // Or any other spinner widget
+                        ));
+                  }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  isRefreshing = true;
+                }
+                if (snapshot.hasError) {
+                  print(snapshot.error);
+                  return Text('Error: ${snapshot.error}');
+                }
                 if (snapshot.hasData && snapshot.data!.isNotEmpty) {
                   debugPrint('show list');
+                  isRefreshing = false;
                   return SliverPadding(
                       padding: const EdgeInsets.only(bottom: 12, top: 13),
                       sliver: GamesList(
@@ -697,6 +741,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                         refreshList: refreshListButton,
                       ));
                 }
+
                 return SliverFillRemaining(
                     hasScrollBody: false,
                     child: Column(
@@ -705,17 +750,19 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                       IconButton(
                         key: addKey2,
                         iconSize: 31,
-                        splashColor: Colors.green,
+                        splashColor: Colors.greenAccent,
                         icon: const Icon(Icons.add),
                         color: Colors.green,
                         onPressed: () async {
                           await Navigator.of(context).pushNamed('/webView');
+                          isRefreshing= true;
                           widget.notifyParent();
                         },
                       ),
                       IconButton(
                         iconSize: 31,
-                        splashColor: Colors.green,
+                        splashColor: Colors.purpleAccent,
+                        color: Colors.deepPurple,
                         icon: const Icon(Icons.refresh),
                         onPressed: () {
                           refreshListButton();
@@ -728,149 +775,6 @@ class _GameCheckerMainState extends State<GameCheckerMain>
     );
   }
 }
-
-//List of items
-class GamesList extends StatefulWidget {
-  final List<Data?> data;
-  final Function() notifyParent;
-  final Function() refreshList;
-
-  GamesList(
-      {Key? key,
-      required this.data,
-      required this.notifyParent,
-      required this.refreshList})
-      : super(key: key);
-
-  @override
-  _GamesListState createState() => _GamesListState();
-}
-
-class _GamesListState extends State<GamesList> {
-
-  @override
-  Widget build(BuildContext context) {
-    debugPrint("list builder");
-    if (widget.data.length == 0) {
-      return SliverFillRemaining(
-          hasScrollBody: false,
-          child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-            IconButton(
-              key: addKey2,
-              iconSize: 31,
-              splashColor: Colors.black26,
-              icon: const Icon(Icons.add),
-              color: Color(0x0000ffff),
-              //tooltip: 'Increase volume by 10',
-              onPressed: () async {
-                await Navigator.of(context).pushNamed('/webView');
-                widget.notifyParent();
-              },
-            ),
-            IconButton(
-              iconSize: 31,
-              splashColor: Colors.green,
-              icon: const Icon(Icons.refresh),
-              //tooltip: 'Increase volume by 10',
-              onPressed: () {
-                widget.refreshList();
-              },
-            )
-          ]));
-    }
-    return
-        SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          return Slidable(
-            key: UniqueKey(),
-            endActionPane: ActionPane(
-              motion: const StretchMotion(),
-              extentRatio: 0.25,
-              dismissible: DismissiblePane(
-                onDismissed: () {
-                  setState(() {
-                    hiveWrapper
-                        .removeFromDb(widget.data[index]!.productRetrieve!.id!);
-                    widget.data.removeAt(index);
-                  });
-                },
-              ),
-              children: [
-                SlidableAction(
-                  label: 'Delete',
-                  backgroundColor: Colors.red,
-                  icon: Icons.delete,
-                  onPressed: (context) {
-                    setState(() {
-                      hiveWrapper.removeFromDb(
-                          widget.data[index]!.productRetrieve!.id!);
-                      widget.data.removeAt(index);
-                    });
-                  },
-                ),
-              ],
-            ),
-            child: GestureDetector(
-                onTap: () => _launchURL(context, widget.data[index]!.url),
-                child: GameRowItem(data: widget.data[index]!)),
-          );
-        },
-        childCount: widget.data.length,
-      ),
-    )
-        //)
-        ;
-  }
-}
-
-_showText(ProductRetrieve productRetrieve) {
-  var textItems = <Widget>[];
-  textItems.add(AutoSizeText(
-    productRetrieve.name!,
-    style: _getTextStyle(),
-    maxLines: 3,
-    maxFontSize: 14,
-  ));
-
-  if (productRetrieve.webctas![0].price!.basePrice != null) {
-    if (_isDiscountExist(productRetrieve)) {
-      textItems.add(AutoSizeText(
-        productRetrieve.webctas![0].price!.basePrice!,
-        style: TextStyle(
-          decoration: TextDecoration.lineThrough,
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-        ),
-        maxFontSize: 15,
-      ));
-      textItems.add(AutoSizeText(
-          productRetrieve.webctas![0].price!.discountedPrice!,
-          style: TextStyle(
-              fontSize: 15, fontWeight: FontWeight.w500, color: Colors.red),
-          maxFontSize: 15));
-    } else {
-      textItems.add(AutoSizeText(
-        productRetrieve.webctas![0].price!.basePrice!,
-        style: TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-        ),
-        maxFontSize: 15,
-      ));
-    }
-  }
-  return textItems;
-}
-
-_getTextStyle() {
-  return TextStyle(fontSize: 14);
-}
-
-void _launchURL(var context, var url) async => Navigator.push(
-    context, MaterialPageRoute(builder: (context) => WebViewContainer(url)));
 
 class ImageWrapper extends StatelessWidget {
   const ImageWrapper({Key? key, required this.url}) : super(key: key);
@@ -898,43 +802,4 @@ class ImageWrapper extends StatelessWidget {
   }
 }
 
-class GameRowItem extends StatelessWidget {
-  const GameRowItem({Key? key, required this.data}) : super(key: key);
-  final Data? data;
 
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-        color: Theme.of(context).primaryColor,
-        elevation: 0.0,
-        child: new Container(
-          padding: new EdgeInsets.all(1.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Flexible(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(7.5),
-                    child: ImageWrapper(
-                      url: data!.imageUrl!,
-                    ),
-                  )),
-              Flexible(
-                  flex: 2,
-                  child: Row(
-                      // mainAxisAlignment: MainAxisAlignment.start,
-                      // crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                            child:  Column(
-                              crossAxisAlignment: CrossAxisAlignment.start, // This line is already uncommented
-                              mainAxisAlignment: MainAxisAlignment.start, // Add this line
-                              children: _showText(data!.productRetrieve!),
-                            ))
-                      ]))
-            ],
-          ),
-        ));
-  }
-}

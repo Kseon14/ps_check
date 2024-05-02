@@ -9,7 +9,6 @@ import 'model.dart';
 
 const String applicationName = "Game Checker";
 
-@pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse notificationResponse) {
   // ignore: avoid_print
   print('notification(${notificationResponse.id}) action tapped: '

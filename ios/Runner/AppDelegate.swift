@@ -19,7 +19,7 @@ import flutter_local_notifications
         GeneratedPluginRegistrant.register(with: registry)
     }
 
-    UIApplication.shared.setMinimumBackgroundFetchInterval(TimeInterval(60))
+    UIApplication.shared.setMinimumBackgroundFetchInterval(TimeInterval(60*12*60))
 
     application.applicationIconBadgeNumber = 0 // For Clear Badge Counts
     let center = UNUserNotificationCenter.current()

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:ps_check/main.dart';
 import 'package:ps_check/spw.dart';
@@ -13,68 +15,27 @@ class TutorialManager {
   TutorialManager({required this.context, required this.sharedPropWrapper});
 
   void startMainTutorial() async {
-    targets.add(
-      TargetFocus(
-        identify: "Setting region",
-        keyTarget: settingKey,
-        color: Colors.red,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-              //align: ContentAlign.top,
-              child: Container(
-                  child: Align(
-            alignment: FractionalOffset.topLeft,
-            child: SizedBox(
-              width: 230.0,
-              height: 300.0,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    "Select your region",
-                    style: getMainTextSizeForTutorial(),
-                  ),
-                  Text(
-                    "Base on this selection ps store will show regional site, "
-                    "games and price",
-                    style: getTextStyleForSubText(),
-                  ),
-                ],
-              ),
-            ),
-          )))
-        ],
-        //shape: ShapeLightFocus.RRect,
-        radius: 5,
-      ),
-    );
-    targets.add(TargetFocus(
-        identify: "Add game",
-        keyTarget: addKeyMain,
-        enableOverlayTab: true,
-        color: Colors.amber,
-        contents: [
-          TargetContent(
-            //align: ContentAlign.bottom,
-            child: Container(
-                child: Align(
-                    alignment: FractionalOffset.topRight,
-                    child: SizedBox(
-                      width: 230.0,
-                      height: 300.0,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisAlignment: MainAxisAlignment.start,
-                        children: <Widget>[
-                          Text("Tap here to start game selection",
-                              style: getMainTextSizeForTutorial()),
-                        ],
-                      ),
-                    ))),
-          ),
-        ]));
+    targets.add(getTargetFocus(
+        "Setting region",
+        settingKey,
+        null,
+        FractionalOffset.topLeft,
+        null,
+        CrossAxisAlignment.start,
+        MainAxisAlignment.start,
+        "Select your region",
+        "Base on this selection ps store will show regional site, "
+            "games and price"));
+    targets.add(getTargetFocus(
+        "Add game",
+        addKeyMain,
+        null,
+        FractionalOffset.topRight,
+        null,
+        CrossAxisAlignment.start,
+        MainAxisAlignment.start,
+        "Tap here to start game selection",
+        null));
     WidgetsBinding.instance.addPostFrameCallback((_) =>
         showTutorial(() => sharedPropWrapper.saveTutorialFlagMain(true)));
   }
@@ -88,7 +49,7 @@ class TutorialManager {
         identify: "find game",
         targetPosition: TargetPosition(Size(700, 400), getPosition()),
         //keyTarget: browserKey,
-        color: Colors.purple,
+        color: getRandomColorFromList(),
         enableOverlayTab: true,
         contents: [
           TargetContent(
@@ -117,104 +78,108 @@ class TutorialManager {
       ),
     );
     targets.add(
-      TargetFocus(
-        identify: "Add game",
-        keyTarget: addKey,
-        enableOverlayTab: true,
-        alignSkip: Alignment.topRight,
-        color: Colors.green,
-        contents: [
-          TargetContent(
-              align: ContentAlign.top,
-              child: Container(
-                  child: Align(
-                      alignment: FractionalOffset.bottomRight,
-                      child: SizedBox(
-                        width: 230.0,
-                        height: 300.0,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: <Widget>[
-                            Text(
-                              "Tap here to save game in the list ",
-                              style: getMainTextSizeForTutorial(),
-                              // )
-                            ),
-                            Text(
-                              "If there are several game cards on the page (different console options/price), "
-                              "a pop-up window will appear with a selection of games",
-                              style: getTextStyleForSubText(),
-                            ),
-                          ],
-                        ),
-                      ))))
-        ],
-      ),
+      getTargetFocus(
+          "Search",
+          searchKey,
+          Alignment.topRight,
+          FractionalOffset.bottomRight,
+          ContentAlign.top,
+          CrossAxisAlignment.start,
+          MainAxisAlignment.end,
+          "Tap here to start searching",
+          "If you don't want to search in your browser, just start typing the name of the game"),
     );
+    targets.add(getTargetFocus(
+        "Add game",
+        addKey,
+        Alignment.topRight,
+        FractionalOffset.bottomRight,
+        ContentAlign.top,
+        CrossAxisAlignment.start,
+        MainAxisAlignment.end,
+        "Tap here to save game in the list",
+        "If there are several game cards on the page (different console options/price), "
+            "a pop-up window will appear with a selection of games"));
     targets.add(
-      TargetFocus(
-          identify: "Done",
-          keyTarget: doneKey,
-          //alignSkip: Alignment.bottomRight,
-          enableOverlayTab: true,
-          color: Colors.cyan,
-          contents: [
-            TargetContent(
-                child: Container(
-                    child: Align(
-                        alignment: FractionalOffset.topLeft,
-                        child: SizedBox(
-                          width: 230.0,
-                          height: 300.0,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: <Widget>[
-                              SizedBox(height: 20),
-                              Text(
-                                "Tap here to get back to list of selected games",
-                                style: getMainTextSizeForTutorial(),
-                              ),
-                            ],
-                          ),
-                        )))),
-          ]),
-    );
-    targets.add(
-      TargetFocus(
-        identify: "Search",
-        keyTarget: searchKey,
-        enableOverlayTab: true,
-        color: Colors.purpleAccent,
-        contents: [
-          TargetContent(
-              child: Container(
-                  child: Align(
-                      alignment: FractionalOffset.topRight,
-                      child: SizedBox(
-                        width: 230.0,
-                        height: 300.0,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              "Tap here to start searching",
-                              style: getMainTextSizeForTutorial(),
-                            ),
-                            Text(
-                              "If you don't want to search in your browser, just start typing the name of the game.",
-                              style: getTextStyleForSubText(),
-                            )
-                          ],
-                        ),
-                      ))))
-        ],
-      ),
+      getTargetFocus(
+          "Done",
+          doneKey,
+          null,
+          FractionalOffset.topLeft,
+          null,
+          CrossAxisAlignment.start,
+          MainAxisAlignment.start,
+          "Tap here to get back to list of selected games",
+          null),
     );
     WidgetsBinding.instance.addPostFrameCallback(
         (_) => showTutorial(() => sharedPropWrapper.saveTutorialFlagWeb(true)));
+  }
+
+  TargetFocus getTargetFocus(
+      String identifier,
+      GlobalKey key,
+      Alignment? skip,
+      FractionalOffset textPosition,
+      ContentAlign? contentAlign,
+      CrossAxisAlignment columnCross,
+      MainAxisAlignment columnMain,
+      String headerText,
+      String? subText) {
+    return TargetFocus(
+        identify: identifier,
+        keyTarget: key,
+        enableOverlayTab: true,
+        alignSkip: skip,
+        color: getRandomColorFromList(),
+        contents: [
+          TargetContent(
+              align: contentAlign == null ? ContentAlign.bottom : contentAlign,
+              child: Container(
+                  child: Align(
+                      alignment: textPosition,
+                      child: SizedBox(
+                        width: 230.0,
+                        height: 300.0,
+                        child: Column(
+                            crossAxisAlignment: columnCross,
+                            mainAxisAlignment: columnMain,
+                            children: <Widget>[
+                              SizedBox(
+                                height: 20,
+                              ),
+                              Text(
+                                headerText,
+                                style: getMainTextSizeForTutorial(),
+                              ),
+                              subText == null
+                                  ? Container()
+                                  : Text(
+                                      subText,
+                                      style: getTextStyleForSubText(),
+                                    ),
+                              SizedBox(
+                                height: 20,
+                              ),
+                            ]),
+                      ))))
+        ],
+        radius: 0);
+  }
+
+  Color getRandomColorFromList() {
+    List<Color> colors = [
+      Colors.purpleAccent,
+      Colors.cyan,
+      Colors.green,
+      Colors.purple,
+      Colors.amber,
+      Colors.red,
+      Colors.pinkAccent,
+      Colors.deepPurpleAccent
+    ];
+
+    return colors[Random().nextInt(colors.length)];
   }
 
   TextStyle getMainTextSizeForTutorial() {

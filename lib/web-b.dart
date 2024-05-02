@@ -1,4 +1,5 @@
 import 'dart:ui' as ui;
+import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -8,12 +9,13 @@ import 'package:html/dom.dart' as dom;
 import 'package:html/parser.dart' as parser;
 import 'package:html/parser.dart';
 import 'package:http/http.dart' as http;
+import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:ps_check/bottomModalSize.dart';
 import 'package:ps_check/ga.dart';
-import 'package:ps_check/search.dart';
 import 'package:ps_check/spw.dart';
 import 'package:ps_check/tutorialManager.dart';
 
+import 'bottomSearch.dart';
 import 'hive_wrapper.dart';
 import 'main.dart';
 import 'model.dart';
@@ -23,6 +25,7 @@ double iconSize = 27;
 var buttonColor = Colors.black;
 var hiveWrapper = HiveWrapper.instance();
 var sharedPropWrapper = SharedPropWrapper.instance();
+String searchText = "";
 
 GlobalKey doneKey = GlobalKey();
 GlobalKey addKey = GlobalKey();
@@ -129,163 +132,164 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
           return PopScope(
               canPop: false,
               child: Scaffold(
-                extendBody: true,
-                appBar: PreferredSize(
-                    preferredSize: Size.fromHeight(40.0),
-                    child: AppBar(
-                      elevation: 0.0,
-                      backgroundColor: Color(0xECF1F1F1),
-                      leadingWidth: 70,
-                      toolbarHeight: 44,
-                      leading: TextButton(
-                        key: doneKey,
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: Text('Done',
-                            style: TextStyle(
-                                fontSize:
-                                    MediaQuery.of(context).size.width * 0.04,
-                                color: Color.fromARGB(255, 0, 114, 206))),
-                      ),
-                      actions: <Widget>[
-                        Padding(
-                            padding: EdgeInsets.only(right: 20.0),
-                            child: GestureDetector(
-                              key: searchKey,
-                              onTap: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  CupertinoPageRoute(
-                                      builder: (context) => SearchScreen()),
-                                );
-                                if (result != null) {
-                                  setState(() {
-                                    _url = result;
-                                  });
-                                } else {
-                                  _url = 'BASE_URl';
-                                }
-                                webView.loadUrl(
-                                    urlRequest: URLRequest(
+                  extendBody: true,
+                  appBar: PreferredSize(
+                      preferredSize: Size.fromHeight(40.0),
+                      child: AppBar(
+                        elevation: 0.0,
+                        backgroundColor: Color(0xECF1F1F1),
+                        leadingWidth: 70,
+                        toolbarHeight: 44,
+                        leading: TextButton(
+                          key: doneKey,
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text('Done',
+                              style: TextStyle(
+                                  fontSize:
+                                      MediaQuery.of(context).size.width * 0.04,
+                                  color: Color.fromARGB(255, 0, 114, 206))),
+                        ),
+                        // actions: <Widget>[
+                        //   Padding(
+                        //       padding: EdgeInsets.only(right: 20.0),
+                        //       child: GestureDetector(
+                        //         key: searchKey,
+                        //         onTap: () async {
+                        //           final result = await Navigator.push(
+                        //             context,
+                        //             CupertinoPageRoute(
+                        //                 builder: (context) => SearchScreen()),
+                        //           );
+                        //           if (result != null) {
+                        //             setState(() {
+                        //               _url = result;
+                        //             });
+                        //           } else {
+                        //             _url = 'BASE_URl';
+                        //           }
+                        //           webView.loadUrl(
+                        //               urlRequest: URLRequest(
+                        //                   url: WebUri(_url == 'BASE_URL'
+                        //                       ? 'https://store.playstation.com/'
+                        //                           '${snapshot.data}'
+                        //                           '/latest'
+                        //                       : _url)));
+                        //         },
+                        //         child: Icon(
+                        //           Icons.search,
+                        //           size: iconSize,
+                        //           color: buttonColor,
+                        //         ),
+                        //       ))
+                        // ],
+                        centerTitle: true,
+                      )),
+                  body: Container(
+                      child: showBlankScreen
+                          ? Center(
+                              child: SizedBox(
+                                  width: 300.0,
+                                  height: 300.0,
+                                  child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.center,
+                                      children: <Widget>[
+                                        Text(
+                                            "Sorry, you switched to PlayStation.com by mistake, "
+                                            "please return to PlayStation Store"),
+                                        IconButton(
+                                          iconSize: 28,
+                                          splashColor: Colors.green,
+                                          icon: const Icon(Icons.home_rounded),
+                                          onPressed: () {
+                                            setState(() {
+                                              showBlankScreen =
+                                                  !showBlankScreen;
+                                              webView.loadUrl(
+                                                  urlRequest: URLRequest(
+                                                      url: WebUri(_url ==
+                                                              'BASE_URL'
+                                                          ? 'https://store.playstation.com/'
+                                                              '${snapshot.data}'
+                                                              '/latest'
+                                                          : _url)));
+                                            });
+                                          },
+                                        )
+                                      ])))
+                          : Column(children: <Widget>[
+                              Container(
+                                  child: progress < 1.0
+                                      ? LinearProgressIndicator(
+                                          value: progress,
+                                          minHeight: 2,
+                                          backgroundColor:
+                                              Colors.lightBlueAccent,
+                                          valueColor: AlwaysStoppedAnimation<
+                                                  Color>(
+                                              Color.fromARGB(255, 0, 114, 206)),
+                                        )
+                                      : Container()),
+                              Container(
+                                child: Expanded(
+                                  child: InAppWebView(
+                                    key: browserKey,
+                                    initialUrlRequest: URLRequest(
                                         url: WebUri(_url == 'BASE_URL'
                                             ? 'https://store.playstation.com/'
                                                 '${snapshot.data}'
                                                 '/latest'
-                                            : _url)));
-                              },
-                              child: Icon(
-                                Icons.search,
-                                size: iconSize,
-                                color: buttonColor,
-                              ),
-                            ))
-                      ],
-                      centerTitle: true,
-                    )),
-                body: Container(
-                    child: showBlankScreen
-                        ? Center(
-                            child: SizedBox(
-                                width: 300.0,
-                                height: 300.0,
-                                child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: <Widget>[
-                                      Text(
-                                          "Sorry, you switched to PlayStation.com by mistake, "
-                                          "please return to PlayStation Store"),
-                                      IconButton(
-                                        iconSize: 28,
-                                        splashColor: Colors.green,
-                                        icon: const Icon(Icons.home_rounded),
-                                        onPressed: () {
-                                          setState(() {
-                                            showBlankScreen = !showBlankScreen;
-                                            webView.loadUrl(
-                                                urlRequest: URLRequest(
-                                                    url: WebUri(_url ==
-                                                            'BASE_URL'
-                                                        ? 'https://store.playstation.com/'
-                                                            '${snapshot.data}'
-                                                            '/latest'
-                                                        : _url)));
-                                          });
-                                        },
-                                      )
-                                    ])))
-                        : Column(children: <Widget>[
-                            Container(
-                                child: progress < 1.0
-                                    ? LinearProgressIndicator(
-                                        value: progress,
-                                        minHeight: 2,
-                                        backgroundColor: Colors.lightBlueAccent,
-                                        valueColor: AlwaysStoppedAnimation<
-                                                Color>(
-                                            Color.fromARGB(255, 0, 114, 206)),
-                                      )
-                                    : Container()),
-                            Container(
-                              child: Expanded(
-                                child: InAppWebView(
-                                  key: browserKey,
-                                  initialUrlRequest: URLRequest(
-                                      url: WebUri(_url == 'BASE_URL'
-                                          ? 'https://store.playstation.com/'
-                                              '${snapshot.data}'
-                                              '/latest'
-                                          : _url)),
-                                  initialSettings: InAppWebViewSettings(
-                                      //  useShouldOverrideUrlLoading: true,
-                                      allowsBackForwardNavigationGestures:
-                                          true),
-                                  onWebViewCreated:
-                                      (InAppWebViewController controller) {
-                                    webView = controller;
-                                    webView.clearCache();
-                                    cookieManager.setCookie(
-                                        url: WebUri(
-                                            "https://store.playstation.com"),
-                                        name: "eucookiepreference",
-                                        value: "reject",
-                                        domain: ".playstation.com",
-                                        isHttpOnly: false);
-                                  },
-                                  onLoadStart: (controller, uri) {
-                                    setCookie2();
-                                    var url = uri.toString().split('/')[2];
-                                    if (url == "www.playstation.com") {
+                                            : _url)),
+                                    initialSettings: InAppWebViewSettings(
+                                        //  useShouldOverrideUrlLoading: true,
+                                        allowsBackForwardNavigationGestures:
+                                            true),
+                                    onWebViewCreated:
+                                        (InAppWebViewController controller) {
+                                      webView = controller;
+                                      webView.clearCache();
+                                      cookieManager.setCookie(
+                                          url: WebUri(
+                                              "https://store.playstation.com"),
+                                          name: "eucookiepreference",
+                                          value: "reject",
+                                          domain: ".playstation.com",
+                                          isHttpOnly: false);
+                                    },
+                                    onLoadStart: (controller, uri) {
+                                      setCookie2();
+                                      var url = uri.toString().split('/')[2];
+                                      if (url == "www.playstation.com") {
+                                        setState(() {
+                                          showBlankScreen = !showBlankScreen;
+                                        });
+                                      }
+                                    },
+                                    onProgressChanged:
+                                        (InAppWebViewController controller,
+                                            int progress) {
                                       setState(() {
-                                        showBlankScreen = !showBlankScreen;
+                                        this.progress = progress / 100;
                                       });
-                                    }
-                                  },
-                                  onProgressChanged:
-                                      (InAppWebViewController controller,
-                                          int progress) {
-                                    setState(() {
-                                      this.progress = progress / 100;
-                                    });
-                                  },
-                                  onLoadStop: (controller, url) async {
-                                    await controller
-                                        .evaluateJavascript(source: """
+                                    },
+                                    onLoadStop: (controller, url) async {
+                                      await controller
+                                          .evaluateJavascript(source: """
                   document.getElementById('sony-bar').style.display = 'none';
                   document.getElementById('shared-nav-root').style.display = 'none';
                   var footer = document.getElementsByTagName('footer')[0];
                   footer.parentNode.removeChild(footer);
                 """);
-                                  },
+                                    },
+                                  ),
                                 ),
                               ),
-                            ),
-                          ])),
-                bottomNavigationBar: MyBottomAppBar(
-                  saveAction: saveGame,
-                  getWebViewAction: getWebView,
-                ),
-              ));
+                            ])),
+                  bottomNavigationBar: MyBottomAppBar(
+                    saveAction: saveGame,
+                    getWebViewAction: getWebView,
+                  )));
         } else {
           return CircularProgressIndicator();
         }
@@ -558,7 +562,6 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
 }
 
 String getUrl(String id, GameType type) {
-  print("id $id");
   switch (type) {
     case GameType.PRODUCT:
       return "https://web.np.playstation.com/api/graphql/v1/op?"
@@ -695,6 +698,7 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
   bool tappedBtn2 = false;
   bool tappedBtn3 = false;
   bool tappedBtn4 = false;
+  bool tappedBtn5 = false;
 
   void _onButtonPressed() async {
     setState(() {
@@ -709,9 +713,12 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
   @override
   Widget build(BuildContext context) {
     double screenHeight = MediaQuery.of(context).size.height;
-    double appBarHeight = screenHeight * 0.097;
-    print(screenHeight);
+    double screenWidth = MediaQuery.of(context).size.width;
+    double appBarHeight = screenHeight * 0.1;
+    //  print(screenHeight);
     double iconSizeBtn = screenHeight * 0.0285;
+    var left = (screenWidth / 5 - iconSizeBtn - 15) / 2;
+    var right = (screenWidth / 5 - iconSizeBtn - 15) / 2;
 
     return Container(
       height: appBarHeight,
@@ -721,7 +728,7 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
           filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: BottomAppBar(
             color: Colors.white.withOpacity(0.6),
-            height: appBarHeight,
+            //  height: appBarHeight - 10,
             child: Row(
               //mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -740,15 +747,17 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
                         .goBack();
                   },
                   child: Container(
-                      // color: Colors.amber,
-                      width: 50.0, // Adjust the width as needed
-                      height: 50.0, // Adjust the height as needed
+                      decoration: BoxDecoration(
+                          border: Border.all(color: Colors.transparent)),
+                      // width: 75.0, // Adjust the width as needed
+                      // height: 50.0, // Adjust the height as needed
+                      padding:
+                          EdgeInsets.only(left: left, right: right, bottom: 5),
                       child: Icon(
                         Icons.arrow_back,
                         size: iconSizeBtn,
-                        color: tappedBtn1 ? Colors.red : buttonColor,
+                        color: tappedBtn1 ? Colors.purpleAccent : buttonColor,
                       )),
-                  // Change color when tapped,),
                 ),
                 GestureDetector(
                   onTap: () {
@@ -764,13 +773,17 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
                         .goForward();
                   },
                   child: Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: Colors.transparent)),
                       // color: Colors.amber,
-                      width: 50.0, // Adjust the width as needed
-                      height: 50.0, // Adjust the height as needed
+                      // width: 75.0, // Adjust the width as needed
+                      // height: 50.0, // Adjust the height as needed
+                      padding:
+                          EdgeInsets.only(left: left, right: right, bottom: 3),
                       child: Icon(
                         Icons.arrow_forward,
                         size: iconSizeBtn,
-                        color: tappedBtn2 ? Colors.red : buttonColor,
+                        color: tappedBtn2 ? Colors.purpleAccent : buttonColor,
                       )),
                 ),
                 GestureDetector(
@@ -787,13 +800,44 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
                         .reload();
                   },
                   child: Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: Colors.transparent)),
                       // color: Colors.amber,
-                      width: 50.0, // Adjust the width as needed
-                      height: 50.0, // Adjust the height as needed
+                      // width: 75.0, // Adjust the width as needed
+                      // height: 50.0, // Adjust the height as needed
+                      padding:
+                          EdgeInsets.only(left: left, right: right, bottom: 3),
                       child: Icon(
                         Icons.refresh,
                         size: iconSizeBtn,
-                        color: tappedBtn3 ? Colors.red : buttonColor,
+                        color: tappedBtn3 ? Colors.purpleAccent : buttonColor,
+                      )),
+                ),
+                GestureDetector(
+                  key: searchKey,
+                  onTap: () {
+                    setState(() {
+                      tappedBtn5 = true;
+                    });
+                    Future.delayed(Duration(milliseconds: 80), () {
+                      setState(() {
+                        tappedBtn5 = false;
+                      });
+                    });
+                    _showModalSheet();
+                  },
+                  child: Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: Colors.transparent)),
+                      // color: Colors.amber,
+                      // width: 75.0, // Adjust the width as needed
+                      // height: 50.0, // Adjust the height as needed
+                      padding:
+                          EdgeInsets.only(left: left, right: right, bottom: 3),
+                      child: Icon(
+                        Icons.search,
+                        size: iconSizeBtn,
+                        color: tappedBtn5 ? Colors.purpleAccent : buttonColor,
                       )),
                 ),
                 GestureDetector(
@@ -810,46 +854,73 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
                     _onButtonPressed();
                   },
                   child: Container(
+                      decoration: BoxDecoration(
+                          border: Border.all(color: Colors.transparent)),
                       alignment: Alignment.center,
                       //color: Colors.amber,
-                      width: 50.0, // Adjust the width as needed
-                      height: 50.0, // Adjust the height as needed
+                      // width: 75.0, // Adjust the width as needed
+                      // height: 50.0, // Adjust the height as needed
+                      padding:
+                          EdgeInsets.only(left: left, right: right, bottom: 3),
                       child: _isLoading
                           ? SizedBox(
-                              child: CircularProgressIndicator(
-                                color: Colors.blueAccent,
-                                strokeWidth: 3,
+                              child:
+                                  // Padding(
+                                  //     padding: const EdgeInsets.only(
+                                  //         left: 2, right: 2, bottom: 0, top: 0),
+                                  //     child:
+                                  LoadingAnimationWidget.halfTriangleDot(
+                                color: Colors.blue,
+                                size: iconSizeBtn,
+                                // )
                               ),
-                              height: iconSizeBtn - 1,
-                              width: iconSizeBtn - 1,
+                              height: iconSizeBtn,
+                              width: iconSizeBtn,
                             )
                           : Icon(
                               Icons.add_box_outlined,
                               size: iconSizeBtn,
-                              color: tappedBtn4 ? Colors.red : buttonColor,
+                              color: tappedBtn4
+                                  ? Colors.purpleAccent
+                                  : buttonColor,
                             )),
                 )
-                // GestureDetector(
-                //   key: addKey,
-                //   onTap: () {
-                //     _onButtonPressed();
-                //   },
-                //   child: _isLoading ?
-                //   SizedBox(
-                //       height: iconSizeBtn-1,
-                //       width: iconSizeBtn-1,
-                //       child:
-                //       CircularProgressIndicator(
-                //         color: Colors.blueAccent,
-                //         strokeWidth: 3,
-                //       ))
-                //       : Icon(Icons.add_box_outlined, size: iconSizeBtn , color: Colors.blueAccent),
-                // )
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  _showModalSheet() {
+    showModalBottomSheet(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+        ),
+        // backgroundColor: Colors.transparent,
+        //barrierColor: Colors.transparent,
+        isScrollControlled: true,
+        context: context,
+        builder: (context) {
+          // print(" parent search text: $searchText");
+          return StatefulBuilder(
+              builder: (BuildContext context, StateSetter setState) {
+            //print(" parent search text: $searchText");
+            return SearchBottomScreen(
+              searchText: searchText,
+              onUrlChange: (String url) {
+                widget
+                    .getWebViewAction()
+                    .loadUrl(urlRequest: URLRequest(url: WebUri(url)));
+              },
+              onSearchTextChange: (String text) {
+                setState(() {
+                  searchText = text;
+                });
+              },
+            );
+          });
+        });
   }
 }
