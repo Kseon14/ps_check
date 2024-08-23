@@ -18,20 +18,24 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: "^3.0.3"
+  sdk: "^3.3.0"
 
 dependencies:
-  http: ^0.13.6
-  flutter_inappwebview: ^5.3.2
+  http: ^1.2.1
+  flutter_inappwebview: ^6.0.0
   shared_preferences: ^2.0.8
   html: ^0.15.3
-  hive: ^2.0.4
+  hive: ^2.2.3
   hive_flutter: ^1.1.0
-  uuid: ^3.0.5
+  uuid: ^4.0.0
+  async: ^2.8.2
   #firebase_messaging: 10.0.7
   workmanager: ^0.5.0
-  flutter_local_notifications: 14.1.1
+  flutter_local_notifications: ^17.1.2
+  firebase_core: ^2.32.0
+  firebase_messaging: ^14.9.4
   auto_size_text: ^3.0.0-nullsafety.0
+  loading_animation_widget: ^1.2.1
   #page_transition: ^2.0.2
   #feature_discovery: 0.14.0
   #introduction_screen: ^2.1.0
@@ -46,13 +50,13 @@ dependencies:
   transparent_image: ^2.0.0
   toggle_switch: ^2.0.1
   provider: ^6.0.3
-  glass_kit: ^2.0.1
+  glass_kit: ^4.0.1
   pull_to_refresh: ^2.0.0
   flutter_easyrefresh: ^2.2.1
   sliver_header_delegate: ^0.0.5
 #  webview_flutter: ^2.1.2
-  webview_cookie_manager: ^2.0.6
-  webview_flutter: ^4.2.0
+#  webview_cookie_manager: ^2.0.6
+#  webview_flutter: ^4.7.0
 
 #  objectbox: ^1.2.0
 #  objectbox_flutter_libs: any
@@ -69,7 +73,7 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
-  intl: ^0.18.0
+#  intl: ^0.18.0
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -96,9 +100,8 @@ dev_dependencies:
 
 flutter_icons:
       ios: true
-      android: true
+      #android: true
       image_path_ios: "asset/icon.jpg"
-      image_path_android: "asset/icon.jpg"
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

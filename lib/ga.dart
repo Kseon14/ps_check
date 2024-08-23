@@ -4,7 +4,7 @@ part 'ga.g.dart';
 
 //export PATH="$PATH:/Users/alexandermamedov/git/flutter/bin"
 //to generate adapter : flutter packages pub run build_runner build
-
+// ./ffmpeg -i "Simulator Screen Recording - iPhone 15 Pro Max - 2024-04-22 at 13.27.50.mp4" -i "music.mp3" -c:v libx264 -crf 12 -r 30 -shortest -vf "scale=886:1920,setsar=1:1,crop=886:1920:97:0" -af "volume=0" "output.mp4"
 @HiveType(typeId: 1)
 class GameAttributes extends HiveObject {
   @HiveField(0)

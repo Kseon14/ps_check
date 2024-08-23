@@ -3,26 +3,27 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
 
-import 'package:auto_size_text/auto_size_text.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:collection/src/iterable_extensions.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_app_badger/flutter_app_badger.dart';
-import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:http/http.dart' as http;
+import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:ps_check/ga.dart';
 import 'package:ps_check/model.dart';
 import 'package:ps_check/notification_service.dart';
 import 'package:ps_check/spw.dart';
 import 'package:ps_check/theme.dart';
+import 'package:ps_check/tutorialManager.dart';
+import 'package:ps_check/url-composer.dart';
 import 'package:ps_check/web-b.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
-import 'package:tutorial_coach_mark/tutorial_coach_mark.dart';
 import 'package:workmanager/workmanager.dart';
-import 'browser2.dart';
+import 'gameList.dart';
 import 'hive_wrapper.dart';
 
 
@@ -36,52 +37,89 @@ var imageWidth = 95.0;
 var imageHeight = 135.0;
 var cacheExtentSize = 2000.0;
 //var host = "http://localhost:9595";
+//var host = "http://192.168.1.2:9595";
 var host = "https://web.np.playstation.com";
 
+
+Future<Map<String, String>> getHeader() async {
+  return {
+    "X-Psn-Store-Locale-Override": await sharedPropWrapper.readRegion(),
+    "content-type": "application/json"
+  };
+}
+
+// const MethodChannel _backgroundChannel = MethodChannel('com.psCheck.backgroundTaskFetch');
+
 GlobalKey settingKey = GlobalKey();
-GlobalKey addKey = GlobalKey();
+GlobalKey addKeyMain = GlobalKey();
 GlobalKey addKey2 = GlobalKey();
 GlobalKey listViewKey = GlobalKey();
+bool isRefreshing = false;
 
 final GlobalKey<AnimatedListState> listKey = GlobalKey();
+
+// class FlutterBackgroundChannel {
+//   static Future<void> invokeMethod(String method, [dynamic arguments]) async {
+//     try {
+//       await _backgroundChannel.invokeMethod(method, arguments);
+//     } catch (e) {
+//       print('Error invoking method: $e');
+//     }
+//   }
+// }
 
 Future<List<Data?>> fetchDataV2(bool fromNotification) async {
   isActionInProgress = true;
   debugPrint("fetching data....");
   List<GameAttributes> gameAttributes = await hiveWrapper.readFromDb();
   List<Data?> dates = [];
-  Map<String, String> headers = {
-    "X-Psn-Store-Locale-Override": await sharedPropWrapper.readRegion()
-  };
+
   if (gameAttributes.isNotEmpty) {
     List<Game> games = List<Game>.from(gameAttributes
         .map((gameAttribute) => convertToGame(gameAttribute))
         .where((game) => game != null)
         .toList());
 
+    const int maxRetries = 3;
     dates = await Future.wait(games.map((game) async {
-      http.Response response =
-          await http.Client().get(Uri.parse(game.url!), headers: headers);
+      http.Response? response;
+      for (int attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          response = await http.Client().get(game.url, headers: await getHeader());
+          if (response.statusCode == 200) {
+            break;
+          } else {
+            debugPrint('Server error: ${response.statusCode} on attempt $attempt for game ${game.url}');
+          }
+        } catch (e, stacktrace) {
+          debugPrint('Network error: $e on attempt $attempt for game ${game.url}');
+          debugPrint('Stacktrace: $stacktrace');
+          await Future.delayed(Duration(seconds: 2)); // Delay before retrying
+        }
+      }
+
+      if (response == null || response.statusCode != 200) {
+        return null; // Skip this element if all retries fail
+      }
+
       Data data = Data.fromJson(response.body, game);
       if (data.productRetrieve == null) {
-        return Future.value(null);
+        return null;
       }
       data.imageUrl = game.imageUrl;
       GameAttributes? gm = gameAttributes
           .firstWhereOrNull((gms) => gms.gameId == data.productRetrieve!.id);
       if (gm == null) {
-        return Future.value(null);
+        return null;
       }
 
       if (!fromNotification) {
-        if (_isDiscountExist(data.productRetrieve!) &
-            await isPriceLessThenSaved(data, gm)) {
-          gm.discountedValue =
-              data.productRetrieve!.webctas![0].price?.discountedValue;
+        if (isDiscountExist(data.productRetrieve!) && await isPriceLessThenSaved(data, gm)) {
+          gm.discountedValue = data.productRetrieve!.webctas![0].price?.discountedValue;
         }
       }
       data.url = gm.url;
-      return Future.value(data);
+      return data;
     }));
 
     debugPrint("GameAttributesOB: $gameAttributes");
@@ -93,25 +131,32 @@ Future<List<Data?>> fetchDataV2(bool fromNotification) async {
         b!.productRetrieve!.webctas!.isEmpty) {
       return 0;
     }
-    if (a.productRetrieve!.webctas![0].price!.discountedValue == null &&
-        b.productRetrieve!.webctas![0].price!.discountedValue == null) {
+    var aPrice = a.productRetrieve!.webctas![0].price!.discountedValue;
+    var bPrice = b.productRetrieve!.webctas![0].price!.discountedValue;
+    if (aPrice == null && bPrice == null) {
       return 0;
     }
-    if (a.productRetrieve!.webctas![0].price!.discountedValue == null) {
+    if (aPrice == null) {
       return 1;
     }
-    if (b.productRetrieve!.webctas![0].price!.discountedValue == null) {
+    if (bPrice == null) {
       return -1;
     }
-    return a.productRetrieve!.webctas![0].price!.discountedValue!
-        .compareTo(b.productRetrieve!.webctas![0].price!.discountedValue!);
+    if (aPrice == 0) {
+      aPrice = a.productRetrieve!.webctas![0].price!.basePriceValue!;
+    }
+    if (bPrice == 0) {
+      bPrice = b.productRetrieve!.webctas![0].price!.basePriceValue!;
+    }
+    return aPrice
+        .compareTo(bPrice);
   });
   dataLength = dates.length;
   isActionInProgress = false;
   return dates;
 }
 
-_isDiscountExist(ProductRetrieve productRetrieve) {
+isDiscountExist(ProductRetrieve productRetrieve) {
   if(productRetrieve.webctas!.isEmpty) {
     return false;
   }
@@ -174,22 +219,20 @@ Game? convertToGame(GameAttributes gameAttribute) {
   switch (gameAttribute.type) {
     case GameType.PRODUCT:
       return Game(
-          url: "$host/api/graphql/v1/op"
-              "?operationName=productRetrieveForCtasWithPrice"
-              "&variables=%7B%22productId%22%3A%22"
-              "${gameAttribute.gameId}"
-              "%22%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version"
-              "%22%3A1%2C%22sha256Hash%22%3A%22dd61c9db18f39d1459b0b4927a58335125ca801c584ced5e138261075da230b2%22%7D%7D",
+          url: ApiUrlComposer.composeUrl(
+              id: gameAttribute.gameId,
+              type:GameType.PRODUCT,
+              operationName: "productRetrieveForCtasWithPrice",
+              sha256Hash: "8872b0419dcab2fea5916ef698544c237b1096f9e76acc6aacf629551adee8cd"),
           imageUrl: gameAttribute.imgUrl,
           id: gameAttribute.gameId);
     case GameType.CONCEPT:
       return Game(
-          url: "$host/api/graphql/v1/op?"
-              "operationName=conceptRetrieveForCtasWithPrice"
-              "&variables=%7B%22conceptId%22%3A%22"
-              "${gameAttribute.gameId}"
-              "%22%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash"
-              "%22%3A%2268e483c8c56ded35047fc3015aa528c6191bf50bce2aae4f190120a1be1c8ba3%22%7D%7D",
+          url: ApiUrlComposer.composeUrl(
+              id: gameAttribute.gameId,
+              type:GameType.CONCEPT,
+              operationName: "conceptRetrieveForCtasWithPrice",
+              sha256Hash: "eab9d873f90d4ad98fd55f07b6a0a606e6b3925f2d03b70477234b79c1df30b5"),
           imageUrl: gameAttribute.imgUrl,
           id: gameAttribute.gameId);
     default:
@@ -199,17 +242,12 @@ Game? convertToGame(GameAttributes gameAttribute) {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   debugPrint("init");
   await hiveWrapper.init();
   await NotificationService().init();
+  await Firebase.initializeApp();
   Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
-  if (Platform.isAndroid) {
-    Workmanager().registerPeriodicTask(
-      "game-checker",
-      "getUpdateForPrice",
-      frequency: Duration(hours: 12),
-    );
-  }
   runApp(GameChecker());
 }
 
@@ -219,6 +257,7 @@ Future selectNotification(String payload) async {
   }
 }
 
+@pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     debugPrint('notification payload: $task');
@@ -282,10 +321,38 @@ class GameChecker extends StatefulWidget {
   _GameCheckerState createState() => _GameCheckerState();
 }
 
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print("Handling a background message: ${message.messageId}");
+}
+
+Future<void> backgroundMessageHandler(RemoteMessage message) async {
+  if (message.data.isNotEmpty) {
+    var taskType = message.data['task'];
+    if (taskType == 'update_data') {
+      // Perform your data fetching task
+      print("Handling a background message: ${message.messageId}");
+    }
+  }
+}
+
 class _GameCheckerState extends State<GameChecker> {
   @override
   void initState() {
     super.initState();
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message != null) {
+        // Handle the initial message
+      }
+    });
+
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      // Handle foreground messages
+    });
+
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      // Handle a message that opened the app from the background
+    });
     theme.addListener(() {
       refresh();
     });
@@ -314,6 +381,8 @@ class _GameCheckerState extends State<GameChecker> {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData apptheme = ThemeData(primaryColor: Colors.white,
+        brightness: Brightness.light);
     if (Platform.isAndroid) {
       SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
           // systemNavigationBarColor: Colors.white,
@@ -330,25 +399,22 @@ class _GameCheckerState extends State<GameChecker> {
           //Brightness.dark, //navigation bar icon
           ));
     }
+
     return MaterialApp(
+      debugShowCheckedModeBanner: false,
       initialRoute: '/',
       routes: {
         '/': (context) => GameCheckerMain(
             show: sharedPropWrapper.readTutorialFlagMain(),
             notifyParent: refresh),
-        '/webView': (context) => InAppWebview(),
+        '/webView': (context) => GameBrowsingScreen('BASE_URL'),
       },
-      theme: ThemeData(
-          brightness: Brightness.light,
-          primaryColor: Colors.white,
-          backgroundColor: Colors.white
-          ),
-      darkTheme: ThemeData(
-          brightness: Brightness.dark,
-          primaryColor: Colors.black45,
-          backgroundColor: Colors.black54
-
-          ),
+      theme: apptheme,
+      darkTheme: ThemeData.from(
+        colorScheme: const ColorScheme.dark(
+          background: Colors.black,
+        ),
+      ),
       themeMode: ThemeMode.light,
     );
   }
@@ -372,114 +438,14 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   FixedExtentScrollController? firstController;
   int? index;
 
-  final List<TargetFocus> targets = <TargetFocus>[];
-
   _startTutorial(Future<dynamic> show) async {
     if (!await show) {
-      initTarget();
-      WidgetsBinding.instance.addPostFrameCallback(_layout);
+      var tutorialManager = TutorialManager(
+        context: context,
+        sharedPropWrapper: sharedPropWrapper, // Ensure you have this class defined
+      );
+      tutorialManager.startMainTutorial();
     }
-  }
-
-  void _layout(_) async {
-    Future.delayed(Duration(milliseconds: 100));
-    debugPrint("tutorial");
-    showTutorial();
-  }
-
-  void showTutorial() async {
-    TutorialCoachMark(
-      targets: targets,
-      colorShadow: Colors.pink,
-      textSkip: "SKIP",
-      paddingFocus: 10,
-      opacityShadow: 0.8,
-      onFinish: () {
-        sharedPropWrapper.saveTutorialFlagMain(true);
-        debugPrint("finish");
-      },
-      onClickTarget: (target) {
-        debugPrint('onClickTarget: $target');
-      },
-      onSkip: () {
-        debugPrint("skip");
-      },
-      onClickOverlay: (target) {
-        debugPrint('onClickOverlay: $target');
-      },
-    )
-      ..show(context: context);
-  }
-
-  initTarget() {
-    targets.add(
-      TargetFocus(
-        identify: "Setting region",
-        keyTarget: settingKey,
-        color: Colors.red,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-            align: ContentAlign.bottom,
-            child: Container(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    "Select your region",
-                    style: TextStyle(
-                      //fontWeight: FontWeight.bold,
-                        color: Colors.white,
-                        fontSize: 20.0),
-                  ),
-                  SizedBox(
-                    width: 200.0,
-                    height: 300.0,
-                    child: Text(
-                      "Base on this selection ps store will show regional site, "
-                          "games and price",
-                      style: TextStyle(color: Colors.white, fontSize: 15.0),
-                    ),
-                  )
-                ],
-              ),
-            ),
-          )
-        ],
-        //shape: ShapeLightFocus.RRect,
-        radius: 5,
-      ),
-    );
-    targets.add(
-      TargetFocus(
-        identify: "Add game",
-        keyTarget: addKey,
-        enableOverlayTab: true,
-        contents: [
-          TargetContent(
-              align: ContentAlign.bottom,
-              child: Container(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: <Widget>[
-                    SizedBox(
-                        width: 200.0,
-                        height: 300.0,
-                        child: Text(
-                          "Click here to start game selection",
-                          style: TextStyle(
-                            //fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontSize: 20.0),
-                        )),
-                  ],
-                ),
-              ))
-        ],
-      ),
-    );
   }
 
   @override
@@ -500,6 +466,11 @@ class _GameCheckerMainState extends State<GameCheckerMain>
         await hiveWrapper.close();
         await hiveWrapper.init();
         debugPrint("state: resumed");
+        //setState(() {
+        isRefreshing = true;
+          widget.notifyParent();
+       // });
+
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -549,16 +520,16 @@ class _GameCheckerMainState extends State<GameCheckerMain>
     return getLocations().indexWhere((region) => region.name == name);
   }
 
-  _showPicker() async {
+  _bottomRegionSelection() async {
     debugPrint("picker");
     showModalBottomSheet(
-        backgroundColor: Colors.white.withOpacity(0.5),
+        backgroundColor: Colors.white.withOpacity(1),
         context: context,
         builder: (BuildContext context) {
           return Container(
               height: 200,
               child: CupertinoPicker(
-                //backgroundColor: Colors.transparent,
+                  //backgroundColor: Colors.white.withOpacity(0.6),
                 //backgroundColor: Theme.of(context).primaryColor,
                   magnification: 1.2,
                   onSelectedItemChanged: (index) {
@@ -571,7 +542,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                       .map((region) =>
                   new Text(
                     region.name,
-                    style: TextStyle(color: Colors.white),
+                    style: TextStyle(color: Colors.black),
                   ))
                       .toList()));
         }).then((value) {
@@ -590,7 +561,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   _showModalSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.transparent,
+      backgroundColor: Colors.white.withOpacity(0.5),
       barrierColor: Colors.transparent,
       builder: (context) {
         return Container(
@@ -635,7 +606,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                               child: Column(
                                 children: [
                                   GestureDetector(
-                                      onTap: () => _showPicker(),
+                                      onTap: () => _bottomRegionSelection(),
                                       child: Row(
                                           mainAxisAlignment:
                                           MainAxisAlignment.spaceBetween,
@@ -691,10 +662,12 @@ class _GameCheckerMainState extends State<GameCheckerMain>
 
   GlobalKey refreshKey = GlobalKey();
   RefreshController refreshController = RefreshController(initialRefresh: false);
+  // Add a separate state for refresh loading
+
 
   @override
   Widget build(BuildContext context) {
-    debugPrint("_GameCheckerMainState");
+  // debugPrint("_GameCheckerMainState");
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -704,13 +677,15 @@ class _GameCheckerMainState extends State<GameCheckerMain>
             parent: AlwaysScrollableScrollPhysics()),
         slivers: <Widget>[
           SliverAppBar(
-            expandedHeight: 25.0,
-            floating: false,
+            toolbarHeight: 44,
+            //collapsedHeight: 20,
+            //expandedHeight: 50.0,
+           floating: true,
             pinned: true,
             snap: false,
-            elevation: 0,
-            forceElevated: true,
-            backgroundColor: Colors.white.withOpacity(0.3),
+            //elevation: 0,
+           // forceElevated: true,
+            backgroundColor: Colors.white.withOpacity(0.6),
             leading: GestureDetector(
               key: settingKey,
               onTap: () {
@@ -723,9 +698,10 @@ class _GameCheckerMainState extends State<GameCheckerMain>
               Padding(
                   padding: EdgeInsets.only(right: 20.0),
                   child: GestureDetector(
-                    key: addKey,
+                    key: addKeyMain,
                     onTap: () async {
                       await Navigator.of(context).pushNamed('/webView');
+                      isRefreshing = true;
                       widget.notifyParent();
                     },
                     child: Icon(Icons.add,
@@ -734,28 +710,18 @@ class _GameCheckerMainState extends State<GameCheckerMain>
             ],
             flexibleSpace: ClipRect(
               child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 13, sigmaY: 13),
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                 child: FlexibleSpaceBar(
                   titlePadding: const EdgeInsets.all(0.0),
                 ),
               ),
             ),
           ),
-          //CupertinoSliverNavigationBar(largeTitle: Text("Pull to refresh")),
-          // 5 - 1000
-          //10 - 2000
-          //20 - 3000
           CupertinoSliverRefreshControl(
             onRefresh: () async {
-              await Future.delayed(Duration(milliseconds: min((dataLength*200).floor(), 3000)));
-              print("onRefresh");
-              print("$dataLength");
-              print(min((dataLength*200).floor(), 3000));
-              // monitor network fetch
-              //await Future.delayed(Duration(milliseconds: 1000));
-              // if failed,use refreshFailed()
+                isRefreshing = true;
+                await Future.delayed(Duration(milliseconds: min((dataLength*200).floor(), 3000)));
               await widget.notifyParent();
-              //refreshListButton();
               refreshController.refreshCompleted();
             },
           ),
@@ -763,17 +729,37 @@ class _GameCheckerMainState extends State<GameCheckerMain>
           FutureBuilder<List<Data?>>(
               future: fetchDataV2(false),
               builder: (context, snapshot) {
-                if (snapshot.hasError) print(snapshot.error);
+                if (!isRefreshing && snapshot.connectionState == ConnectionState.waiting) {
+                  isRefreshing = false;
+                    // Show a spinner while data is loading
+                    return SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: LoadingAnimationWidget.staggeredDotsWave(
+                            color: Colors.blue,
+                            size: 35,
+                          ), // Or any other spinner widget
+                        ));
+                  }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  isRefreshing = true;
+                }
+                if (snapshot.hasError) {
+                  print(snapshot.error);
+                  return Text('Error: ${snapshot.error}');
+                }
                 if (snapshot.hasData && snapshot.data!.isNotEmpty) {
                   debugPrint('show list');
+                  isRefreshing = false;
                   return SliverPadding(
-                      padding: const EdgeInsets.only(bottom: 12, top: 16),
+                      padding: const EdgeInsets.only(bottom: 12, top: 13),
                       sliver: GamesList(
                         data: snapshot.data ?? [],
                         notifyParent: widget.notifyParent,
                         refreshList: refreshListButton,
                       ));
                 }
+
                 return SliverFillRemaining(
                     hasScrollBody: false,
                     child: Column(
@@ -782,17 +768,19 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                       IconButton(
                         key: addKey2,
                         iconSize: 31,
-                        splashColor: Colors.green,
+                        splashColor: Colors.greenAccent,
                         icon: const Icon(Icons.add),
                         color: Colors.green,
                         onPressed: () async {
                           await Navigator.of(context).pushNamed('/webView');
+                          isRefreshing= true;
                           widget.notifyParent();
                         },
                       ),
                       IconButton(
                         iconSize: 31,
-                        splashColor: Colors.green,
+                        splashColor: Colors.purpleAccent,
+                        color: Colors.deepPurple,
                         icon: const Icon(Icons.refresh),
                         onPressed: () {
                           refreshListButton();
@@ -805,149 +793,6 @@ class _GameCheckerMainState extends State<GameCheckerMain>
     );
   }
 }
-
-//List of items
-class GamesList extends StatefulWidget {
-  final List<Data?> data;
-  final Function() notifyParent;
-  final Function() refreshList;
-
-  GamesList(
-      {Key? key,
-      required this.data,
-      required this.notifyParent,
-      required this.refreshList})
-      : super(key: key);
-
-  @override
-  _GamesListState createState() => _GamesListState();
-}
-
-class _GamesListState extends State<GamesList> {
-
-  @override
-  Widget build(BuildContext context) {
-    debugPrint("list builder");
-    if (widget.data.length == 0) {
-      return SliverFillRemaining(
-          hasScrollBody: false,
-          child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-            IconButton(
-              key: addKey2,
-              iconSize: 31,
-              splashColor: Colors.black26,
-              icon: const Icon(Icons.add),
-              color: Color(0x0000ffff),
-              //tooltip: 'Increase volume by 10',
-              onPressed: () async {
-                await Navigator.of(context).pushNamed('/webView');
-                widget.notifyParent();
-              },
-            ),
-            IconButton(
-              iconSize: 31,
-              splashColor: Colors.green,
-              icon: const Icon(Icons.refresh),
-              //tooltip: 'Increase volume by 10',
-              onPressed: () {
-                widget.refreshList();
-              },
-            )
-          ]));
-    }
-    return
-        SliverList(
-      delegate: SliverChildBuilderDelegate(
-        (context, index) {
-          return Slidable(
-            key: UniqueKey(),
-            endActionPane: ActionPane(
-              motion: const StretchMotion(),
-              extentRatio: 0.25,
-              dismissible: DismissiblePane(
-                onDismissed: () {
-                  setState(() {
-                    hiveWrapper
-                        .removeFromDb(widget.data[index]!.productRetrieve!.id!);
-                    widget.data.removeAt(index);
-                  });
-                },
-              ),
-              children: [
-                SlidableAction(
-                  label: 'Delete',
-                  backgroundColor: Colors.red,
-                  icon: Icons.delete,
-                  onPressed: (context) {
-                    setState(() {
-                      hiveWrapper.removeFromDb(
-                          widget.data[index]!.productRetrieve!.id!);
-                      widget.data.removeAt(index);
-                    });
-                  },
-                ),
-              ],
-            ),
-            child: GestureDetector(
-                onTap: () => _launchURL(context, widget.data[index]!.url),
-                child: GameRowItem(data: widget.data[index]!)),
-          );
-        },
-        childCount: widget.data.length,
-      ),
-    )
-        //)
-        ;
-  }
-}
-
-_showText(ProductRetrieve productRetrieve) {
-  var textItems = <Widget>[];
-  textItems.add(AutoSizeText(
-    productRetrieve.name!,
-    style: _getTextStyle(),
-    maxLines: 3,
-    maxFontSize: 14,
-  ));
-
-  if (productRetrieve.webctas![0].price!.basePrice != null) {
-    if (_isDiscountExist(productRetrieve)) {
-      textItems.add(AutoSizeText(
-        productRetrieve.webctas![0].price!.basePrice!,
-        style: TextStyle(
-          decoration: TextDecoration.lineThrough,
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-        ),
-        maxFontSize: 15,
-      ));
-      textItems.add(AutoSizeText(
-          productRetrieve.webctas![0].price!.discountedPrice!,
-          style: TextStyle(
-              fontSize: 15, fontWeight: FontWeight.w500, color: Colors.red),
-          maxFontSize: 15));
-    } else {
-      textItems.add(AutoSizeText(
-        productRetrieve.webctas![0].price!.basePrice!,
-        style: TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w500,
-        ),
-        maxFontSize: 15,
-      ));
-    }
-  }
-  return textItems;
-}
-
-_getTextStyle() {
-  return TextStyle(fontSize: 14);
-}
-
-void _launchURL(var context, var url) async => Navigator.push(
-    context, MaterialPageRoute(builder: (context) => WebViewContainer(url)));
 
 class ImageWrapper extends StatelessWidget {
   const ImageWrapper({Key? key, required this.url}) : super(key: key);
@@ -975,43 +820,4 @@ class ImageWrapper extends StatelessWidget {
   }
 }
 
-class GameRowItem extends StatelessWidget {
-  const GameRowItem({Key? key, required this.data}) : super(key: key);
-  final Data? data;
 
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-        color: Theme.of(context).primaryColor,
-        elevation: 0.0,
-        child: new Container(
-          padding: new EdgeInsets.all(1.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Flexible(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(7.5),
-                    child: ImageWrapper(
-                      url: data!.imageUrl!,
-                    ),
-                  )),
-              Flexible(
-                  flex: 2,
-                  child: Row(
-                      // mainAxisAlignment: MainAxisAlignment.start,
-                      // crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                            child:  Column(
-                              crossAxisAlignment: CrossAxisAlignment.start, // This line is already uncommented
-                              mainAxisAlignment: MainAxisAlignment.start, // Add this line
-                              children: _showText(data!.productRetrieve!),
-                            ))
-                      ]))
-            ],
-          ),
-        ));
-  }
-}

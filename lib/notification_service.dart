@@ -9,7 +9,6 @@ import 'model.dart';
 
 const String applicationName = "Game Checker";
 
-@pragma('vm:entry-point')
 void notificationTapBackground(NotificationResponse notificationResponse) {
   // ignore: avoid_print
   print('notification(${notificationResponse.id}) action tapped: '
@@ -38,9 +37,6 @@ class NotificationService {
 
   Future<void> init() async {
 
-    final AndroidInitializationSettings initializationSettingsAndroid =
-    AndroidInitializationSettings('@mipmap/ic_launcher');
-
     final DarwinInitializationSettings initializationSettingsIOS =
     DarwinInitializationSettings(
       requestSoundPermission: true,
@@ -54,11 +50,9 @@ class NotificationService {
 
     const String navigationActionId = 'id_3';
 
-
-
     final InitializationSettings initializationSettings =
     InitializationSettings(
-        android: initializationSettingsAndroid,
+        android: null,
         iOS: initializationSettingsIOS,
         macOS: null);
     await flutterLocalNotificationsPlugin.initialize(initializationSettings,
@@ -93,7 +87,7 @@ class NotificationService {
 
   void showNotification(Data data) async {
     debugPrint('notification payload: start');
-    String text = data.productRetrieve!.name! + " have new price: " +
+    String text = data.productRetrieve!.name! + " has new price: " +
         data.productRetrieve!.webctas![0].price!.discountedPrice!;
     await flutterLocalNotificationsPlugin.show(
         data.hashCode,
@@ -125,7 +119,6 @@ class NotificationService {
   void handleApplicationWasLaunchedFromNotification() async {
     final NotificationAppLaunchDetails? notificationAppLaunchDetails =
     await flutterLocalNotificationsPlugin.getNotificationAppLaunchDetails();
-
   }
 
   Data getGaFromJson(String payload) {
