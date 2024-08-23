@@ -31,9 +31,9 @@ dependencies:
   async: ^2.8.2
   #firebase_messaging: 10.0.7
   workmanager: ^0.5.0
-  flutter_local_notifications: ^17.1.0
-  firebase_core: ^2.29.0
-  firebase_messaging: ^14.8.1
+  flutter_local_notifications: ^17.1.2
+  firebase_core: ^2.32.0
+  firebase_messaging: ^14.9.4
   auto_size_text: ^3.0.0-nullsafety.0
   loading_animation_widget: ^1.2.1
   #page_transition: ^2.0.2
@@ -50,7 +50,7 @@ dependencies:
   transparent_image: ^2.0.0
   toggle_switch: ^2.0.1
   provider: ^6.0.3
-  glass_kit: ^3.0.0
+  glass_kit: ^4.0.1
   pull_to_refresh: ^2.0.0
   flutter_easyrefresh: ^2.2.1
   sliver_header_delegate: ^0.0.5
@@ -100,9 +100,8 @@ dev_dependencies:
 
 flutter_icons:
       ios: true
-      android: true
+      #android: true
       image_path_ios: "asset/icon.jpg"
-      image_path_android: "asset/icon.jpg"
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

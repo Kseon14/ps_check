@@ -24,7 +24,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void initState() {
     super.initState();
     _controller.addListener(_onTextChanged);
-    WidgetsBinding.instance!.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
     });
   }
@@ -155,7 +155,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ],
           )),
       bottomSheet: AnimatedContainer(
-        duration: const Duration(milliseconds: 700),
+        duration: const Duration(milliseconds: 300),
         curve: Curves.linear,
         height: bottomHeight,
         color: MediaQuery.of(context).viewInsets.bottom == 0
@@ -168,7 +168,7 @@ class _SearchScreenState extends State<SearchScreen> {
             AnimatedPadding(
               padding: EdgeInsets.fromLTRB(10, 5, 10,
                   MediaQuery.of(context).viewInsets.bottom == 0 ? 40 : 5),
-              duration: const Duration(milliseconds: 700),
+              duration: const Duration(milliseconds: 400),
               curve: Curves.easeInOut,
               child: Container(
                 width: screenWidth * 0.8,
@@ -185,7 +185,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     isCollapsed: true,
                     //contentPadding: const EdgeInsets.all(0.5),
 
-                    prefixIcon: Icon(Icons.search, color: Colors.black),
+                    prefixIcon: Icon(Icons.search, color: Colors.grey),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(5),
                       borderSide: BorderSide.none,

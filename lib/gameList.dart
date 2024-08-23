@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:ps_check/game-web-card.dart';
 
-import 'browser2.dart';
 import 'gameRow.dart';
 import 'main.dart';
 import 'model.dart';

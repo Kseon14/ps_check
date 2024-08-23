@@ -15,7 +15,7 @@ class _WebViewContainerState extends State<WebViewContainer> {
   InAppWebViewController? _webViewController;
   double progress = 0;
 
-  final cookieManager1 = CookieManager.instance();
+  final cookieManager = CookieManager.instance();
 
   _WebViewContainerState(this._url);
 
@@ -44,10 +44,10 @@ class _WebViewContainerState extends State<WebViewContainer> {
 
 
   void setCookie2() async {
-    await cookieManager1.setCookie(
+    await cookieManager.setCookie(
       url: WebUri('https://store.playstation.com'),
-      name: "eucookiepreference",
-      value: "reject",
+      name: "_evidon_consent_cookie",
+      value: "date",
       expiresDate: DateTime.now().add(Duration(days: 5)).microsecondsSinceEpoch,
       isSecure: true,
     );

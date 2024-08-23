@@ -14,6 +14,8 @@ import 'package:ps_check/bottomModalSize.dart';
 import 'package:ps_check/ga.dart';
 import 'package:ps_check/spw.dart';
 import 'package:ps_check/tutorialManager.dart';
+import 'package:ps_check/url-composer.dart';
+import 'package:uuid/uuid.dart';
 
 import 'bottomSearch.dart';
 import 'hive_wrapper.dart';
@@ -252,8 +254,8 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
                                       cookieManager.setCookie(
                                           url: WebUri(
                                               "https://store.playstation.com"),
-                                          name: "eucookiepreference",
-                                          value: "reject",
+                                          name: "_evidon_consent_cookie",
+                                          value: "date",
                                           domain: ".playstation.com",
                                           isHttpOnly: false);
                                     },
@@ -299,8 +301,8 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
     // await cookieManager1.removeSessionCookies();
     await cookieManager.setCookie(
       url: WebUri('https://store.playstation.com'),
-      name: "eucookiepreference",
-      value: "reject",
+      name: "_evidon_consent_cookie",
+      value: "date",
       expiresDate: DateTime.now().add(Duration(days: 5)).microsecondsSinceEpoch,
       isSecure: true,
     );
@@ -352,11 +354,8 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
 
   Future<Data> getOptions(GameAttributes gm) async {
     print("start retrieving");
-    Map<String, String> headers = {
-      "X-Psn-Store-Locale-Override": await sharedPropWrapper.readRegion()
-    };
     http.Response response = await http.Client()
-        .get(Uri.parse(getUrl(gm.gameId, gm.type)), headers: headers);
+        .get(getUrl(gm.gameId, gm.type), headers: await getHeader());
     Game? game = convertToGame(gm);
     return Future.value(Data.fromJson(response.body, game!));
   }
@@ -561,20 +560,23 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
   }
 }
 
-String getUrl(String id, GameType type) {
+
+
+Uri getUrl(String id, GameType type) {
   switch (type) {
     case GameType.PRODUCT:
-      return "https://web.np.playstation.com/api/graphql/v1/op?"
-          "operationName=productRetrieveForUpsellWithCtas"
-          "&variables=%7B%22productId%22%3A%22"
-          "$id"
-          "%22%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%22bedffc84f86faddaf8897c2a19e3a3308cf58aecd772a4a363fe438fa18ed45f%22%7D%7D";
+      return ApiUrlComposer.composeUrl(
+          id: id,
+          type:type,
+          operationName: "productRetrieveForUpsellWithCtas",
+          sha256Hash: "fb0bfa0af4d8dc42b28fa5c077ed715543e7fb8a3deff8117a50b99864d246f1");
     case GameType.CONCEPT:
-      return "https://web.np.playstation.com/api/graphql/v1/op?"
-          "operationName=conceptRetrieveForUpsellWithCtas"
-          "&variables=%7B%22conceptId%22%3A%22"
-          "$id"
-          "%22%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash%22%3A%224460d00afbeeb676c0d6ef3365b73d1c4f122378b175d6fda13b8ee07ca1d0a2%22%7D%7D";
+    return ApiUrlComposer.composeUrl(
+        id: id,
+        type:type,
+        operationName: "conceptRetrieveForUpsellWithCtas",
+        sha256Hash: "278822e6c6b9f304e4c788867b3e8a448c67847ac932d09213d5085811be3a18");
+      ;
   }
 }
 
@@ -610,7 +612,7 @@ _getGameImageUrl(Uri? futureUrl) async {
   if (imgElement == null) {
     return "";
   }
-  String imageUrl = imgElement!.attributes['src']!;
+  String imageUrl = imgElement.attributes['src']!;
   return imageUrl.substring(0, imageUrl.indexOf("?")) + "?w=250";
 }
 

@@ -325,11 +325,11 @@ class Error {
 }
 
 class Game {
-  final String? url;
-  final String? imageUrl;
-  final String? id;
+  final Uri url;
+  final String imageUrl;
+  final String id;
 
-  Game({this.url, this.imageUrl, this.id});
+  Game({required this.url, required this.imageUrl, required this.id});
 
   @override
   String toString() {

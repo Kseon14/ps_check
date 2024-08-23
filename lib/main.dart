@@ -19,6 +19,7 @@ import 'package:ps_check/notification_service.dart';
 import 'package:ps_check/spw.dart';
 import 'package:ps_check/theme.dart';
 import 'package:ps_check/tutorialManager.dart';
+import 'package:ps_check/url-composer.dart';
 import 'package:ps_check/web-b.dart';
 import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:workmanager/workmanager.dart';
@@ -38,6 +39,14 @@ var cacheExtentSize = 2000.0;
 //var host = "http://localhost:9595";
 //var host = "http://192.168.1.2:9595";
 var host = "https://web.np.playstation.com";
+
+
+Future<Map<String, String>> getHeader() async {
+  return {
+    "X-Psn-Store-Locale-Override": await sharedPropWrapper.readRegion(),
+    "content-type": "application/json"
+  };
+}
 
 // const MethodChannel _backgroundChannel = MethodChannel('com.psCheck.backgroundTaskFetch');
 
@@ -64,38 +73,53 @@ Future<List<Data?>> fetchDataV2(bool fromNotification) async {
   debugPrint("fetching data....");
   List<GameAttributes> gameAttributes = await hiveWrapper.readFromDb();
   List<Data?> dates = [];
-  Map<String, String> headers = {
-    "X-Psn-Store-Locale-Override": await sharedPropWrapper.readRegion()
-  };
+
   if (gameAttributes.isNotEmpty) {
     List<Game> games = List<Game>.from(gameAttributes
         .map((gameAttribute) => convertToGame(gameAttribute))
         .where((game) => game != null)
         .toList());
 
+    const int maxRetries = 3;
     dates = await Future.wait(games.map((game) async {
-      http.Response response =
-          await http.Client().get(Uri.parse(game.url!), headers: headers);
+      http.Response? response;
+      for (int attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          response = await http.Client().get(game.url, headers: await getHeader());
+          if (response.statusCode == 200) {
+            break;
+          } else {
+            debugPrint('Server error: ${response.statusCode} on attempt $attempt for game ${game.url}');
+          }
+        } catch (e, stacktrace) {
+          debugPrint('Network error: $e on attempt $attempt for game ${game.url}');
+          debugPrint('Stacktrace: $stacktrace');
+          await Future.delayed(Duration(seconds: 2)); // Delay before retrying
+        }
+      }
+
+      if (response == null || response.statusCode != 200) {
+        return null; // Skip this element if all retries fail
+      }
+
       Data data = Data.fromJson(response.body, game);
       if (data.productRetrieve == null) {
-        return Future.value(null);
+        return null;
       }
       data.imageUrl = game.imageUrl;
       GameAttributes? gm = gameAttributes
           .firstWhereOrNull((gms) => gms.gameId == data.productRetrieve!.id);
       if (gm == null) {
-        return Future.value(null);
+        return null;
       }
 
       if (!fromNotification) {
-        if (isDiscountExist(data.productRetrieve!) &
-            await isPriceLessThenSaved(data, gm)) {
-          gm.discountedValue =
-              data.productRetrieve!.webctas![0].price?.discountedValue;
+        if (isDiscountExist(data.productRetrieve!) && await isPriceLessThenSaved(data, gm)) {
+          gm.discountedValue = data.productRetrieve!.webctas![0].price?.discountedValue;
         }
       }
       data.url = gm.url;
-      return Future.value(data);
+      return data;
     }));
 
     debugPrint("GameAttributesOB: $gameAttributes");
@@ -109,8 +133,7 @@ Future<List<Data?>> fetchDataV2(bool fromNotification) async {
     }
     var aPrice = a.productRetrieve!.webctas![0].price!.discountedValue;
     var bPrice = b.productRetrieve!.webctas![0].price!.discountedValue;
-    if (aPrice == null &&
-        bPrice == null) {
+    if (aPrice == null && bPrice == null) {
       return 0;
     }
     if (aPrice == null) {
@@ -196,22 +219,20 @@ Game? convertToGame(GameAttributes gameAttribute) {
   switch (gameAttribute.type) {
     case GameType.PRODUCT:
       return Game(
-          url: "$host/api/graphql/v1/op"
-              "?operationName=productRetrieveForCtasWithPrice"
-              "&variables=%7B%22productId%22%3A%22"
-              "${gameAttribute.gameId}"
-              "%22%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version"
-              "%22%3A1%2C%22sha256Hash%22%3A%22dd61c9db18f39d1459b0b4927a58335125ca801c584ced5e138261075da230b2%22%7D%7D",
+          url: ApiUrlComposer.composeUrl(
+              id: gameAttribute.gameId,
+              type:GameType.PRODUCT,
+              operationName: "productRetrieveForCtasWithPrice",
+              sha256Hash: "8872b0419dcab2fea5916ef698544c237b1096f9e76acc6aacf629551adee8cd"),
           imageUrl: gameAttribute.imgUrl,
           id: gameAttribute.gameId);
     case GameType.CONCEPT:
       return Game(
-          url: "$host/api/graphql/v1/op?"
-              "operationName=conceptRetrieveForCtasWithPrice"
-              "&variables=%7B%22conceptId%22%3A%22"
-              "${gameAttribute.gameId}"
-              "%22%7D&extensions=%7B%22persistedQuery%22%3A%7B%22version%22%3A1%2C%22sha256Hash"
-              "%22%3A%2268e483c8c56ded35047fc3015aa528c6191bf50bce2aae4f190120a1be1c8ba3%22%7D%7D",
+          url: ApiUrlComposer.composeUrl(
+              id: gameAttribute.gameId,
+              type:GameType.CONCEPT,
+              operationName: "conceptRetrieveForCtasWithPrice",
+              sha256Hash: "eab9d873f90d4ad98fd55f07b6a0a606e6b3925f2d03b70477234b79c1df30b5"),
           imageUrl: gameAttribute.imgUrl,
           id: gameAttribute.gameId);
     default:
@@ -360,6 +381,8 @@ class _GameCheckerState extends State<GameChecker> {
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData apptheme = ThemeData(primaryColor: Colors.white,
+        brightness: Brightness.light);
     if (Platform.isAndroid) {
       SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
           // systemNavigationBarColor: Colors.white,
@@ -386,17 +409,12 @@ class _GameCheckerState extends State<GameChecker> {
             notifyParent: refresh),
         '/webView': (context) => GameBrowsingScreen('BASE_URL'),
       },
-      theme: ThemeData(
-          brightness: Brightness.light,
-          primaryColor: Colors.white,
-          backgroundColor: Colors.white
-          ),
-      darkTheme: ThemeData(
-          brightness: Brightness.dark,
-          primaryColor: Colors.black45,
-          backgroundColor: Colors.black54
-
-          ),
+      theme: apptheme,
+      darkTheme: ThemeData.from(
+        colorScheme: const ColorScheme.dark(
+          background: Colors.black,
+        ),
+      ),
       themeMode: ThemeMode.light,
     );
   }
