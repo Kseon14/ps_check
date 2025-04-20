@@ -1,175 +1,93 @@
-import 'dart:convert';
+
+import 'package:flutter/cupertino.dart';
 
 class Data {
-  ProductRetrieve? productRetrieve;
+  List<Product> products;
   String? imageUrl;
   String? url;
+  String? conceptId;
+  List<Media>? dataMedia;
 
-  Data({this.productRetrieve});
+  Data({
+    required this.products,
+    this.imageUrl,
+    this.url,
+    this.conceptId,
+    this.dataMedia
+  });
+
+  //1. error :
+  //   json["data"]["productRetrieve"] == null
+  //2. concept :
+  //  json["data"]["conceptRetrieve"] == {}
+  //3. product :
+  //  json["data"]["productRetrieve"] == {}
+  //4. announced :
+  //  json["data"]["conceptRetrieve"] == {}
+  //  json["data"]["conceptRetrieve"] ["products"] == [](Empty list)
+
+  factory Data.fromJson(Map<String, dynamic> json) {
+    var conceptId;
+    var productsJson;
+
+    var productType = null;
+    //debugPrint("1>>" + json.toString());
+    if(json["data"]["conceptRetrieve"]!= null &&
+        (json["data"]["conceptRetrieve"]["products"]).length == 0) {
+        //debugPrint("2>>" + "products is empty");
+        var concept = json["data"]["conceptRetrieve"];
+        return Data(products: [Product(name: concept["name"],
+            conceptId: concept["id"])
+        ]);
+      }
+
+    var dataMedia;
+    if(json["data"]["productRetrieve"] != null ){
+     // debugPrint("3>>" + "productRetrieve");
+      conceptId = json["data"]["productRetrieve"]["concept"]["id"];
+
+      if(json["data"]["productRetrieve"]["concept"]["media"] != null
+         && json["data"]["productRetrieve"]["concept"]["media"].length != 0){
+        var jsonMedia = json["data"]["productRetrieve"]["concept"]["media"];
+        dataMedia= (jsonMedia as List<dynamic>?)
+            ?.map((item) => Media.fromJson(item))
+            .toList();
+      }
+
+      if(json["data"]["productRetrieve"]["concept"]["products"] != null) {
+        productsJson = json["data"]["productRetrieve"]["concept"]["products"];
+      } else {
+        productsJson = [json["data"]["productRetrieve"]];
+      }
+      var prodType = json["data"]["productRetrieve"]["topCategory"];
+      //debugPrint("3.1>>" + "products type: " + prodType);
+      productType = prodType == null ? null : ProductType.fromString(prodType);
+    }
+
+    if(json["data"]["conceptRetrieve"] != null) {
+     // debugPrint("4>>" + "conceptRetrieve");
+      conceptId = json["data"]["conceptRetrieve"]["id"];
+      productsJson = json["data"]["conceptRetrieve"]["products"];
+    }
+
+    //debugPrint("5>>" + "productsJson: " + productsJson.toString());
+    List<Product> products = (productsJson as List<dynamic>)
+        .map((prod) => Product.fromJson(prod as Map<String, dynamic>, productType, conceptId))
+        .where((product) => product.price?.basePrice != null)
+        .toList();
+
+    return Data(
+      conceptId: conceptId,
+      products: products,
+      dataMedia: dataMedia
+    );
+  }
 
   @override
   String toString() {
-    return 'Data{productRetrieve: $productRetrieve, imageUrl: $imageUrl}';
+    return 'Data{products: $products, imageUrl: $imageUrl, url: $url,}';
   }
 
-  factory Data.fromJson(String body, Game game) {
-    Map<String, dynamic> inputJson = json.decode(body)['data'];
-    if (inputJson['productRetrieve'] != null) {
-      return Data(
-        productRetrieve: ProductRetrieve.fromJson(inputJson['productRetrieve']),
-      );
-    }
-    if (inputJson['conceptRetrieve'] != null) {
-      if (inputJson['conceptRetrieve']['products'] == 0){
-        return Data(productRetrieve:
-        ProductRetrieve(
-            name: 'Game not available, please add game again' ,
-            id: game.id,
-            webctas: [Webctas(
-                price: Price(basePriceValue: 0,
-                    discountedValue: 0,
-                    discountedPrice: inputJson['conceptRetrieve']['releaseDate']['type'] =='COMING_SOON'? 'Announced':"0")
-            )]),
-        );
-      }
-      Data conceptDate=  Data(productRetrieve: ProductRetrieve.fromJson(inputJson['conceptRetrieve']));
-      if (conceptDate.productRetrieve == null){
-        return Data(productRetrieve:
-        ProductRetrieve(
-            name: 'Game not available, please add game again' ,
-            id: game.id,
-            webctas: [Webctas(
-                price: Price(basePriceValue: 0,
-                    discountedValue: 0,
-                    discountedPrice: "0")
-            )]),
-        );
-      }
-      if (conceptDate.productRetrieve!.webctas!.isEmpty &&
-          conceptDate.productRetrieve!.concept!.products!.isEmpty){
-       return Data(productRetrieve:
-        ProductRetrieve(
-            name: '${conceptDate.productRetrieve!.name}\n>>>> Not available for order, please remove and add again' ,
-            id: game.id,
-            webctas: [Webctas(
-                price: Price(basePriceValue: 0,
-                    discountedValue: 0,
-                    discountedPrice: 'Not available for order, please remove and add again')
-            )]),
-        );
-      } else {
-        return conceptDate;
-      }
-    }
-    else {
-      List<Error> errors = json.decode(body)['errors']
-          .map<Error>((json) => Error.fromJson(json)).toList();
-      print("errors: $errors");
-      return Data(productRetrieve:
-      ProductRetrieve(
-          name: 'Possibly this game change place in store or not available for '
-              'the selected region, please remove and add again' ,
-          id: game.id,
-          webctas: [Webctas(
-              price: Price(basePriceValue: 0,
-                  discountedValue: 0,
-                  discountedPrice: "0")
-          )]),
-      );
-    }
-  }
-  Data.fromJsonInt(Map<String, dynamic> json)
-      : productRetrieve = json["productRetrieve"];
-
-  Map<String, dynamic> toJson() => {
-    "productRetrieve": productRetrieve,
-  };
-}
-
-class ProductRetrieve {
-  final List<Webctas>? webctas;
-  final String? name;
-  String? id;
-  Concept? concept;
-
-  ProductRetrieve({ this.name, this.webctas, this.id, this.concept});
-
-
-  @override
-  String toString() {
-    return 'ProductRetrieve{webctas: $webctas, name: $name, id: $id, concept: $concept}';
-  }
-
-   static ProductRetrieve? fromJson(Map<String, dynamic>? json) {
-    var isConcept = json!['__typename'] == 'Concept';
-    Concept? concept;
-    if (isConcept){
-      Map<String, dynamic>? jsonDp = json['defaultProduct'];
-      if (jsonDp == null){
-        concept = Concept.fromJson(json);
-      } else {
-        json = jsonDp;
-      }
-    }
-    if (json == null){
-      return null;
-    }
-
-    if (concept == null) {
-      concept = Concept.fromJson(json['concept']);
-    }
-    List<Webctas> wct = List.empty();
-    if(concept == null) {
-      if( json['webctas'] == null){
-        return null;
-      }
-      var webctasList = json['webctas'] as List;
-      wct = webctasList.map((wb) => Webctas.fromJson(wb)).toList();
-    }
-
-    return ProductRetrieve(
-        id: isConcept && json['concept'] !=null ? json['concept']['id']
-        : json['id'],
-        name: json['name'] == null ? concept!.products![0].name : json['name'],
-        webctas: wct,
-         concept:concept);
-  }
-}
-
-class Sku {
-  String? id;
-
-  Sku({this.id});
-
-  factory Sku.fromJson(Map<String, dynamic> json) {
-    return Sku(id: json['id']);
-  }
-}
-
-class Concept {
-   List<Product>? products;
-
-   Concept({this.products});
-
-   @override
-   String toString() {
-     return 'Concept{products: $products}';
-   }
-
-   static Concept? fromJson(Map<String, dynamic>? json) {
-     if(json == null){
-       return null;
-     }
-     var products = json['products'] == null ? null : json['products'] as List;
-
-     if(products == null || products.length == 0) {
-       return null;
-     }
-
-     List<Product> productList = products.map((wb) => Product.fromJson(wb)).toList();
-
-     return Concept(products: productList);
-   }
 }
 
 class Product{
@@ -177,42 +95,91 @@ class Product{
   List<String>? platforms;
   String? id;
   String? name;
-  final List<Webctas>? webctas;
+  final Price? price;
   bool? isSelected = false;
+  ProductType? productType;
+  String? conceptId;
 
-  Product({this.media, this.platforms, this.id, this.name, this.webctas});
+  DateTime? releaseDate;
 
+  Product({this.media,
+    this.platforms,
+    this.id,
+    this.name,
+    this.price,
+    this.releaseDate,
+    this.conceptId,
+    this.productType});
 
   @override
   String toString() {
-    return 'Product{media: $media, platforms: $platforms, id: $id, name: $name, webctas: $webctas, isSelected: $isSelected}';
+    return 'Product{media: $media, '
+        'platforms: $platforms,'
+        'id: $id, '
+        'name: $name, '
+        'price: $price, '
+        'releaseDate: $releaseDate, '
+        'productType: $releaseDate, '
+        'conceptId: $conceptId, '
+        'isSelected: $isSelected}';
   }
 
-  factory Product.fromJson(Map<String, dynamic> json) {
-    var webctasList = ((json['webctas'] ?? []) as List);
-    if(webctasList.isEmpty) {
-      return Product(
-          platforms: null,
-          media: null,
-          webctas: null,
-          id: json['id'],
-          name: json['name']
-      );
+  factory Product.fromJson(Map<String, dynamic> json, ProductType? productType, String conceptId) {
+    if (json.isEmpty) {
+      return Product();
     }
-    var platformList = (json['platforms'] as List).cast<String>();
-    var mediaList = json['media'] as List;
 
-    List<Webctas> wct = webctasList.map((wb) => Webctas.fromJson(wb)).toList();
-    List<Media> mda = mediaList.map((md) => Media.fromJson(md)).toList();
+    Price? price;
+    if (json['webctas'] != null && json['webctas'] is List) {
+      List<dynamic> webctasList = json['webctas'];
+      if (webctasList.isNotEmpty) {
+        price = Price.fromJson(webctasList.first["price"]);
+      }
+    }
+
+    List<String>? platforms = (json['platforms'] as List<dynamic>?)
+        ?.map((item) => item as String)
+        .toList();
+
+    List<Media>? media = (json['media'] as List<dynamic>?)
+        ?.map((item) => Media.fromJson(item))
+        .toList();
+
+
+     DateTime? releaseDate;
+    if (json['releaseDate'] != null) {
+      releaseDate = DateTime.tryParse(json['releaseDate']);
+    }
 
     return Product(
-        platforms: platformList,
-      media: mda,
-      webctas: wct,
-      id: json['id'],
-      name: json['name']
+      platforms: platforms,
+      media: media,
+      price: price,
+      id: json['id'] as String?,
+      name: json['name'] as String?,
+      releaseDate: releaseDate,
+      productType: productType,
+      conceptId: conceptId,
     );
   }
+
+
+  getDiscountPriceValue(){
+    return price?.discountedValue;
+  }
+
+  getDiscountedPrice(){
+    return price?.discountedPrice;
+  }
+
+  getBasePrice(){
+    return price?.basePrice;
+  }
+
+  getBasePriceValue(){
+    return price?.basePriceValue;
+  }
+
 }
 
 class Media {
@@ -232,22 +199,6 @@ class Media {
     url: json['url']);
   }
 
-}
-
-class ConceptRetrieve {
-  final ProductRetrieve? productRetrieve;
-
-  ConceptRetrieve({this.productRetrieve});
-
-  @override
-  String toString() {
-    return 'ConceptRetrieve{productRetrieve: $productRetrieve}';
-  }
-
-  factory ConceptRetrieve.fromJson(Map<String, dynamic> json) {
-    return ConceptRetrieve(productRetrieve:
-        ProductRetrieve.fromJson(json['defaultProduct']));
-  }
 }
 
 class Webctas {
@@ -275,32 +226,36 @@ class Price {
   final String? discountedPrice;
   final int? discountedValue;
   final int? basePriceValue;
+  final bool? isFree;
   late final DateTime? endTime;
 
   Price(
       {this.basePrice, this.discountText, this.discountedPrice, this.endTime,
-        this.basePriceValue, this.discountedValue});
+        this.basePriceValue, this.discountedValue, this.isFree});
 
   static Price? fromJson(Map<String, dynamic> json) {
-    if (json['basePriceValue'] != 0) {
+   var isFree = json['isFree'];
+
+    //if (json['basePriceValue'] != 0) {
       return Price(
-        basePrice: json['basePrice'],
+        basePrice: isFree? json['discountedPrice'] : json['basePrice'],
         discountText: json['discountText'],
-        discountedPrice: json['discountedPrice'],
-        discountedValue: json['discountedValue'],
-        basePriceValue: json['basePriceValue'],
+        discountedPrice:  json['discountedPrice'],
+        discountedValue: isFree? 0: json['discountedValue'],
+        basePriceValue: isFree? 0: json['basePriceValue'],
+        isFree:  isFree,
         endTime: (json['endTime'] == null
             ? null
             : DateTime.fromMillisecondsSinceEpoch(int.parse(json['endTime']))),
       );
-    }
-    if(json['basePrice']!= null && json['discountedPrice']!= null) {
-      return Price (
-          basePrice: json['basePrice'],
-          discountedPrice: json['discountedPrice']
-      );
-    }
-    return null;
+    //}
+    // if(json['basePrice']!= null && json['discountedPrice']!= null) {
+    //   return Price (
+    //       basePrice: json['basePrice'],
+    //       discountedPrice: json['discountedPrice']
+    //   );
+    // }
+    // return null;
   }
 
   @override
@@ -324,15 +279,19 @@ class Error {
   }
 }
 
-class Game {
-  final Uri url;
-  final String imageUrl;
-  final String id;
+enum ProductType {
+  GAME("GAME"),
+  ADD_ON("ADD_ON");
 
-  Game({required this.url, required this.imageUrl, required this.id});
+  final String value;
 
-  @override
-  String toString() {
-    return 'Game{url: $url, imageUrl: $imageUrl, id: $id}';
+  const ProductType(this.value);
+
+  static ProductType? fromString(String value) {
+    return ProductType.values.firstWhere((e) => e.value == value,
+        orElse: () => ProductType.GAME);
   }
 }
+
+
+
