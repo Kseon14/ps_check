@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SharedPropWrapper{
@@ -24,39 +25,39 @@ class SharedPropWrapper{
      if (region == null) {
        region = prefs.getString(prefRegionName);
        if (region != null) {
-         print(region);
+         debugPrint(region);
          return Future.value(region);
        } else {
          region = 'en-gb';
          return Future.value(region);
        }
      } else {
-       print("from local " + region);
+       //debugPrint("from local " + region);
        return Future.value(region);
      }
    }
 
   saveRegion(String value) async {
     await isInitiated();
-    print('save in db');
+   // debugPrint('save in db');
     prefs.setString(prefRegionName, value);
     region = value;
-    print('saved $value');
+    debugPrint('saved $value');
   }
 
   saveTutorialFlagMain(var passedTutorial) async {
     await isInitiated();
     prefs.setBool(prefTutorialNameMain, passedTutorial);
-    print('saved $passedTutorial');
+    debugPrint('saved $passedTutorial');
     prefTutorialNameMainValue = passedTutorial;
   }
 
   readTutorialFlagMain() async {
     if (prefTutorialNameMainValue == null || prefTutorialNameMainValue!) {
       await isInitiated();
-      print('read from shared prop');
+     // debugPrint('read from shared prop');
       final value = prefs.getBool(prefTutorialNameMain) ?? false;
-      print('read: $value');
+      debugPrint('read: $value');
       return value;
     } else {
       return prefTutorialNameMainValue;
@@ -66,16 +67,16 @@ class SharedPropWrapper{
   saveTutorialFlagWeb(var passedTutorial) async {
     await isInitiated();
     prefs.setBool(prefTutorialNameWeb, passedTutorial);
-    print('saved $passedTutorial');
+    debugPrint('saved $passedTutorial');
     prefTutorialNameWebValue = passedTutorial;
   }
 
   readTutorialFlagWeb() async {
     if (prefTutorialNameWebValue == null || prefTutorialNameWebValue!) {
       await isInitiated();
-      print('read from shared prop');
+     // debugPrint('read from shared prop');
       final value = prefs.getBool(prefTutorialNameWeb) ?? false;
-      print('read: $value');
+      debugPrint('read: $value');
       return value;
     } else {
       return prefTutorialNameWebValue;

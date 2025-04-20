@@ -12,22 +12,34 @@ class GameAttributes extends HiveObject {
   @HiveField(1)
   GameType type;
   @HiveField(2)
-  String imgUrl;
+  String? imgUrl;
   @HiveField(3)
   int? discountedValue;
   @HiveField(4)
   String url;
+  @HiveField(5)
+  String? conceptId;
+  @HiveField(6)
+  bool? addon;
 
 
   GameAttributes({ required this.gameId,
-    required this.imgUrl,
+    this.imgUrl,
     required this.type,
-    required this.url});
+    required this.url,
+    this.conceptId,
+    this.addon});
 
 
   @override
   String toString() {
-    return 'GameAttributes{gameId: $gameId, type: $type, imgUrl: $imgUrl, discountedValue: $discountedValue, url: $url}';
+    return 'GameAttributes{gameId: $gameId, \n'
+        'type: $type, imgUrl: $imgUrl, \n'
+        'discountedValue: $discountedValue, \n'
+        'url: $url,\n'
+        'conceptId: $conceptId, \n'
+        'addon: $addon, \n'
+        '}\n';
   }
 
   GameAttributes.fromJson(Map<String, dynamic> json)
@@ -35,6 +47,8 @@ class GameAttributes extends HiveObject {
         type = json["type"],
         imgUrl = json["imgUrl"],
         discountedValue = json["discountedValue"],
+        conceptId = json["conceptId"],
+        addon = json["addon"],
         url = json["url"];
 
   Map<String, dynamic> toJson() => {
@@ -42,6 +56,8 @@ class GameAttributes extends HiveObject {
     "type": type,
     "imgUrl": imgUrl,
     "discountedValue": discountedValue,
+    "conceptId": conceptId,
+    "addon": addon,
     "url": url,
   };
 }
@@ -51,5 +67,7 @@ class GameAttributes extends HiveObject {
   @HiveField(0)
   PRODUCT,
   @HiveField(1)
-  CONCEPT
+  CONCEPT,
+  @HiveField(2)
+  ADD_ON
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
@@ -26,20 +27,19 @@ import 'package:workmanager/workmanager.dart';
 import 'gameList.dart';
 import 'hive_wrapper.dart';
 
-
 var hiveWrapper = HiveWrapper.instance();
 var sharedPropWrapper = SharedPropWrapper.instance();
 var theme = ThemeInt.instance();
 bool isActionInProgress = false;
 int dataLength = 0;
 
-var imageWidth = 95.0;
+var imageWidth = 90.0;
 var imageHeight = 135.0;
 var cacheExtentSize = 2000.0;
-//var host = "http://localhost:9595";
+const int maxRetries = 3;
+//var host = "http://localhost:9597";
 //var host = "http://192.168.1.2:9595";
 var host = "https://web.np.playstation.com";
-
 
 Future<Map<String, String>> getHeader() async {
   return {
@@ -48,7 +48,37 @@ Future<Map<String, String>> getHeader() async {
   };
 }
 
-// const MethodChannel _backgroundChannel = MethodChannel('com.psCheck.backgroundTaskFetch');
+Future<http.Response> requestDate(Uri? url) async {
+  Map<String, String> headers = await getHeader();
+  http.Response response = await http.Client().get(url!, headers: headers);
+  return response;
+}
+
+Uri getUrl(String id, GameType type) {
+  switch (type) {
+    case GameType.ADD_ON:
+      return ApiUrlComposer.composeUrl(
+          id: id,
+          type: type,
+          operationName: "productRetrieveForCtasWithPrice",
+          sha256Hash:
+              "8872b0419dcab2fea5916ef698544c237b1096f9e76acc6aacf629551adee8cd");
+    case GameType.PRODUCT:
+      return ApiUrlComposer.composeUrl(
+          id: id,
+          type: type,
+          operationName: "productRetrieveForUpsellWithCtas",
+          sha256Hash:
+              "fb0bfa0af4d8dc42b28fa5c077ed715543e7fb8a3deff8117a50b99864d246f1");
+    case GameType.CONCEPT:
+      return ApiUrlComposer.composeUrl(
+          id: id,
+          type: type,
+          operationName: "conceptRetrieveForUpsellWithCtas",
+          sha256Hash:
+              "278822e6c6b9f304e4c788867b3e8a448c67847ac932d09213d5085811be3a18");
+  }
+}
 
 GlobalKey settingKey = GlobalKey();
 GlobalKey addKeyMain = GlobalKey();
@@ -58,156 +88,178 @@ bool isRefreshing = false;
 
 final GlobalKey<AnimatedListState> listKey = GlobalKey();
 
-// class FlutterBackgroundChannel {
-//   static Future<void> invokeMethod(String method, [dynamic arguments]) async {
-//     try {
-//       await _backgroundChannel.invokeMethod(method, arguments);
-//     } catch (e) {
-//       print('Error invoking method: $e');
-//     }
-//   }
-// }
-
 Future<List<Data?>> fetchDataV2(bool fromNotification) async {
   isActionInProgress = true;
   debugPrint("fetching data....");
-  List<GameAttributes> gameAttributes = await hiveWrapper.readFromDb();
+  List<GameAttributes> gms = await hiveWrapper.readFromDb();
   List<Data?> dates = [];
 
-  if (gameAttributes.isNotEmpty) {
-    List<Game> games = List<Game>.from(gameAttributes
-        .map((gameAttribute) => convertToGame(gameAttribute))
-        .where((game) => game != null)
-        .toList());
-
-    const int maxRetries = 3;
-    dates = await Future.wait(games.map((game) async {
+  if (gms.isNotEmpty) {
+    dates = await Future.wait(gms.map((gm) async {
       http.Response? response;
       for (int attempt = 0; attempt < maxRetries; attempt++) {
         try {
-          response = await http.Client().get(game.url, headers: await getHeader());
+          if (gm.conceptId == null || gm.addon == null) {
+            if (gm.type == GameType.CONCEPT) {
+              gm.conceptId = gm.gameId;
+            } else {
+              http.Response tmpResponse =
+                  await requestDate(getUrl(gm.gameId, gm.type));
+              if (tmpResponse.statusCode == 200) {
+                var responseBody = json.decode(tmpResponse.body);
+                if (responseBody["errors"] != null) {
+                  return Data(products: [
+                    Product(
+                        name: "❌ The game was removed or its location was changed by a PS Store initiative\nPlease re-add.")
+                  ], imageUrl: gm.imgUrl, url: gm.url);
+                }
+
+                Data data = Data.fromJson(responseBody);
+                if (data.products.isNotEmpty) {
+                  gm.conceptId = data.conceptId;
+                  if (data.products.first.productType != null &&
+                      data.products.first.productType == ProductType.ADD_ON) {
+                    gm.type = GameType.ADD_ON;
+                    gm.addon = true;
+                  }
+                }
+                hiveWrapper.save(gm);
+              }
+            }
+          }
+
+          debugPrint("fetching data for ${gm.gameId}....");
+          response = await requestDate(getUrl(
+              gm.addon == true ? gm.gameId : gm.conceptId!,
+              gm.addon == true ? GameType.ADD_ON : GameType.CONCEPT));
           if (response.statusCode == 200) {
             break;
           } else {
-            debugPrint('Server error: ${response.statusCode} on attempt $attempt for game ${game.url}');
+            debugPrint('Server error: ${response.statusCode} on attempt '
+                '$attempt for game ${gm.url}');
           }
         } catch (e, stacktrace) {
-          debugPrint('Network error: $e on attempt $attempt for game ${game.url}');
+          debugPrint(
+              'Network error: $e on attempt $attempt for game ${gm.url}');
           debugPrint('Stacktrace: $stacktrace');
-          await Future.delayed(Duration(seconds: 2)); // Delay before retrying
+          await Future.delayed(Duration(seconds: 2));
         }
       }
 
       if (response == null || response.statusCode != 200) {
-        return null; // Skip this element if all retries fail
-      }
-
-      Data data = Data.fromJson(response.body, game);
-      if (data.productRetrieve == null) {
-        return null;
-      }
-      data.imageUrl = game.imageUrl;
-      GameAttributes? gm = gameAttributes
-          .firstWhereOrNull((gms) => gms.gameId == data.productRetrieve!.id);
-      if (gm == null) {
         return null;
       }
 
+      Data data = Data.fromJson(json.decode(response.body));
+      data.imageUrl = gm.imgUrl;
+      data.url = gm.url;
+
+      List<Product> products = data.products;
+
+      // if(gm.type == GameType.CONCEPT && products.length == 1){
+      //   gm.type = GameType.PRODUCT;
+      //   gm.gameId = products.first.id!;
+      //  // hiveWrapper.save(gm);
+      // }
+
+      Product? selectedProduct =
+          products.firstWhereOrNull((product) => product.id == gm.gameId);
+
+      if (selectedProduct != null) {
+        debugPrint('Selected Product: ${selectedProduct.name}');
+      } else {
+        debugPrint('No matching product found for ${gm.gameId}');
+        return null;
+      }
+      Data gameInfo =
+          Data(products: [selectedProduct], imageUrl: gm.imgUrl!, url: gm.url);
       if (!fromNotification) {
-        if (isDiscountExist(data.productRetrieve!) && await isPriceLessThenSaved(data, gm)) {
-          gm.discountedValue = data.productRetrieve!.webctas![0].price?.discountedValue;
+        if (await isPriceLessThenSaved(selectedProduct, gm)) {
+          gm.discountedValue = selectedProduct.getDiscountPriceValue();
         }
       }
-      data.url = gm.url;
-      return data;
+      hiveWrapper.save(gm);
+      return gameInfo;
     }));
 
-    debugPrint("GameAttributesOB: $gameAttributes");
-    debugPrint("data: $dates");
+    // debugPrint("GameAttributesOB: $gms");
+    // debugPrint("data: $dates");
   }
+
   dates = dates.where((data) => data != null).toList();
   dates.sort((a, b) {
-    if (a!.productRetrieve!.webctas!.isEmpty  ||
-        b!.productRetrieve!.webctas!.isEmpty) {
-      return 0;
-    }
-    var aPrice = a.productRetrieve!.webctas![0].price!.discountedValue;
-    var bPrice = b.productRetrieve!.webctas![0].price!.discountedValue;
+    var aProduct = a!.products.first;
+    var bProduct = b!.products.first;
+    var aPrice = aProduct.getDiscountPriceValue();
+    var bPrice = bProduct.getDiscountPriceValue();
+
     if (aPrice == null && bPrice == null) {
       return 0;
     }
     if (aPrice == null) {
-      return 1;
-    }
-    if (bPrice == null) {
       return -1;
     }
+    if (bPrice == null) {
+      return 1;
+    }
+
+    if (aPrice == 0 && bPrice == 0) {
+      return 0;
+    }
     if (aPrice == 0) {
-      aPrice = a.productRetrieve!.webctas![0].price!.basePriceValue!;
+      return 1; // a should come last
     }
+
+    // Case 5: bPrice is 0, aPrice is not
     if (bPrice == 0) {
-      bPrice = b.productRetrieve!.webctas![0].price!.basePriceValue!;
+      return -1; // b should come last
     }
-    return aPrice
-        .compareTo(bPrice);
+    return aPrice.compareTo(bPrice);
   });
   dataLength = dates.length;
   isActionInProgress = false;
   return dates;
 }
 
-isDiscountExist(ProductRetrieve productRetrieve) {
-  if(productRetrieve.webctas!.isEmpty) {
+isDiscountExist(Product product) {
+  if (product.getDiscountPriceValue() == null) {
     return false;
   }
-  if (productRetrieve.webctas![0].price!.discountedValue == null) {
+  if (product.getDiscountPriceValue() == 0) {
     return false;
   }
-  if (productRetrieve.webctas![0].price!.discountedValue == 0) {
-    return false;
-  }
-  return productRetrieve.webctas![0].price!.discountedValue! <
-      productRetrieve.webctas![0].price!.basePriceValue!;
+  return product.getDiscountPriceValue() < product.getBasePriceValue();
 }
 
 // ga = null discount = 100
 // ga = 100 discount = 100
 // ga = 100 discount = 200
-isPriceLessThenSaved(Data data, GameAttributes gameAttributes) async {
+isPriceLessThenSaved(Product product, GameAttributes gameAttributes) async {
+  if (product.getDiscountPriceValue() == null) {
+    return false;
+  }
   if (gameAttributes.discountedValue == null) {
-    if (data.productRetrieve!.webctas!.isEmpty){
-      return false;
-    }
-    gameAttributes.discountedValue =
-        data.productRetrieve!.webctas![0].price!.discountedValue;
+    gameAttributes.discountedValue = product.getDiscountPriceValue();
     debugPrint("gameAttributes.discountedValue is null");
     debugPrint(
         "gameAttributes.discountedValue now ${gameAttributes.discountedValue}");
     await hiveWrapper.save(gameAttributes);
     return false;
   }
-  if (data.productRetrieve!.webctas![0].price!.discountedValue == null) {
-    return false;
-  }
-  if (data.productRetrieve!.webctas![0].price!.discountedValue! >
-      gameAttributes.discountedValue!) {
-    gameAttributes.discountedValue =
-        data.productRetrieve!.webctas![0].price!.discountedValue;
+  if (product.getDiscountPriceValue() > gameAttributes.discountedValue!) {
+    gameAttributes.discountedValue = product.getDiscountPriceValue();
     debugPrint("gameAttributes.discountedValue less then in data");
-    debugPrint(
-        "${data.productRetrieve!.webctas![0].price!.discountedValue} more then"
+    debugPrint("${product.getDiscountPriceValue()} more then"
         "${gameAttributes.discountedValue}");
     debugPrint("gameAttributes.discountedValue less then in data");
     await hiveWrapper.save(gameAttributes);
     return false;
   }
-  if (data.productRetrieve!.webctas![0].price!.discountedValue! <
-      gameAttributes.discountedValue!) {
-    gameAttributes.discountedValue =
-        data.productRetrieve!.webctas![0].price!.discountedValue;
+
+  if (product.getDiscountPriceValue() < gameAttributes.discountedValue!) {
+    gameAttributes.discountedValue = product.getDiscountPriceValue();
     debugPrint("gameAttributes.discountedValue more then in data");
-    debugPrint(
-        "${data.productRetrieve!.webctas![0].price!.discountedValue} less then"
+    debugPrint("${product.getDiscountPriceValue()} less then"
         "${gameAttributes.discountedValue}");
     await hiveWrapper.save(gameAttributes);
     return true;
@@ -215,46 +267,22 @@ isPriceLessThenSaved(Data data, GameAttributes gameAttributes) async {
   return false;
 }
 
-Game? convertToGame(GameAttributes gameAttribute) {
-  switch (gameAttribute.type) {
-    case GameType.PRODUCT:
-      return Game(
-          url: ApiUrlComposer.composeUrl(
-              id: gameAttribute.gameId,
-              type:GameType.PRODUCT,
-              operationName: "productRetrieveForCtasWithPrice",
-              sha256Hash: "8872b0419dcab2fea5916ef698544c237b1096f9e76acc6aacf629551adee8cd"),
-          imageUrl: gameAttribute.imgUrl,
-          id: gameAttribute.gameId);
-    case GameType.CONCEPT:
-      return Game(
-          url: ApiUrlComposer.composeUrl(
-              id: gameAttribute.gameId,
-              type:GameType.CONCEPT,
-              operationName: "conceptRetrieveForCtasWithPrice",
-              sha256Hash: "eab9d873f90d4ad98fd55f07b6a0a606e6b3925f2d03b70477234b79c1df30b5"),
-          imageUrl: gameAttribute.imgUrl,
-          id: gameAttribute.gameId);
-    default:
-      return null;
-  }
-}
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Firebase FIRST
+  await Firebase.initializeApp();
+
+  // Then register the background handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
   debugPrint("init");
+
   await hiveWrapper.init();
   await NotificationService().init();
-  await Firebase.initializeApp();
   Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
-  runApp(GameChecker());
-}
 
-Future selectNotification(String payload) async {
-  if (payload != null) {
-    debugPrint('notification payload: $payload');
-  }
+  runApp(GameChecker());
 }
 
 @pragma('vm:entry-point')
@@ -267,49 +295,45 @@ void callbackDispatcher() {
     List<GameAttributes> gameAttributes = await hiveWrapper.readFromDb();
     var badgeCount = 0;
     for (final data in datas) {
-      GameAttributes? gm = gameAttributes
-          .firstWhereOrNull((i) => i.gameId == data!.productRetrieve?.id);
+      if (data == null || data.products.isEmpty) {
+        continue;
+      }
+      var product = data.products.first;
+      GameAttributes? gm =
+          gameAttributes.firstWhereOrNull((i) => i.gameId == product.id);
       debugPrint("data :$data");
       debugPrint("gm :$gm");
-      //  print("less or not"+ isPriceLessThenSaved(data, gm));
-      // if (_isPriceLessThenSaved(data, gm)) {
+
       if (gm!.discountedValue == null) {
-        gm.discountedValue =
-            data!.productRetrieve?.webctas?[0].price?.discountedValue;
+        gm.discountedValue = product.getDiscountPriceValue();
         await hiveWrapper.save(gm);
         //hiveWrapper.put(gm);
         debugPrint("gameAttributes.discountedValue is null");
         debugPrint("gameAttributes.discountedValue now ${gm.discountedValue}");
       }
-      if (data!.productRetrieve?.webctas![0].price!.discountedValue == null) {
+      if (product.getDiscountPriceValue() == null) {
         continue;
       }
-      if (data.productRetrieve!.webctas![0].price!.discountedValue! >
-          gm.discountedValue!) {
-        gm.discountedValue =
-            data.productRetrieve!.webctas![0].price!.discountedValue;
+      if (product.getDiscountPriceValue()! > gm.discountedValue!) {
+        gm.discountedValue = product.getDiscountPriceValue();
         await hiveWrapper.save(gm);
         debugPrint("gameAttributes.discountedValue less then in data");
-        debugPrint(
-            "${data.productRetrieve!.webctas![0].price!.discountedValue} more then"
+        debugPrint("${product.getDiscountPriceValue()} more then"
             "${gm.discountedValue}");
       }
-      if (data.productRetrieve!.webctas![0].price!.discountedValue! <
-          gm.discountedValue!) {
-        gm.discountedValue =
-            data.productRetrieve!.webctas![0].price!.discountedValue;
+      if (product.getDiscountPriceValue() < gm.discountedValue!) {
+        gm.discountedValue = product.getDiscountPriceValue();
         await hiveWrapper.save(gm);
         //hiveWrapper.put(gm);
         debugPrint("gameAttributes.discountedValue more then in data");
-        debugPrint(
-            "${data.productRetrieve!.webctas![0].price!.discountedValue} less then"
+        debugPrint("${product.getDiscountPriceValue()} less then"
             "${gm.discountedValue}");
         NotificationService().showNotification(data);
         badgeCount = badgeCount + 1;
       }
       FlutterAppBadger.updateBadgeCount(badgeCount);
     }
-    await hiveWrapper.close();
+    await hiveWrapper.flush();
     return Future.value(true);
   });
 }
@@ -323,17 +347,7 @@ class GameChecker extends StatefulWidget {
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  print("Handling a background message: ${message.messageId}");
-}
-
-Future<void> backgroundMessageHandler(RemoteMessage message) async {
-  if (message.data.isNotEmpty) {
-    var taskType = message.data['task'];
-    if (taskType == 'update_data') {
-      // Perform your data fetching task
-      print("Handling a background message: ${message.messageId}");
-    }
-  }
+  debugPrint("Handling a background message: ${message.messageId}");
 }
 
 class _GameCheckerState extends State<GameChecker> {
@@ -364,9 +378,9 @@ class _GameCheckerState extends State<GameChecker> {
         // Action is already in progress, skip executing it again.
         return;
       }
-      print(">>>>>>>>> refreshing");
+      debugPrint(">>>>>>>>> refreshing");
       // Perform the async operation here
-     // await Future.delayed(Duration(seconds: 3));
+      // await Future.delayed(Duration(seconds: 3));
       setState(() {
         isActionInProgress = true;
       });
@@ -381,8 +395,8 @@ class _GameCheckerState extends State<GameChecker> {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData apptheme = ThemeData(primaryColor: Colors.white,
-        brightness: Brightness.light);
+    final ThemeData apptheme =
+        ThemeData(primaryColor: Colors.white, brightness: Brightness.light);
     if (Platform.isAndroid) {
       SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
           // systemNavigationBarColor: Colors.white,
@@ -437,12 +451,14 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   String selectedRegion = "";
   FixedExtentScrollController? firstController;
   int? index;
+  ScrollController _scrollController = ScrollController();
+  void Function()? _resetGamesListSelection;
 
   _startTutorial(Future<dynamic> show) async {
     if (!await show) {
       var tutorialManager = TutorialManager(
         context: context,
-        sharedPropWrapper: sharedPropWrapper, // Ensure you have this class defined
+        sharedPropWrapper: sharedPropWrapper,
       );
       tutorialManager.startMainTutorial();
     }
@@ -452,6 +468,8 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   void dispose() async {
     WidgetsBinding.instance.removeObserver(this);
     await hiveWrapper.close();
+    _scrollController.removeListener(_handleScroll);
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -459,22 +477,21 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   void didChangeAppLifecycleState(AppLifecycleState state) async {
     switch (state) {
       case AppLifecycleState.resumed:
-      // force a close and start from fresh. Just incase
-      // a box wasn't closed on inactive/paused
+        // force a close and start from fresh. Just incase
+        // a box wasn't closed on inactive/paused
         NotificationService().cancelAllNotifications();
         FlutterAppBadger.updateBadgeCount(0);
-        await hiveWrapper.close();
-        await hiveWrapper.init();
         debugPrint("state: resumed");
         //setState(() {
         isRefreshing = true;
-          widget.notifyParent();
-       // });
+        widget.notifyParent();
+        // });
 
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
         debugPrint("state: paused");
+        hiveWrapper.flush();
         break;
       default:
         debugPrint("state: default");
@@ -489,8 +506,20 @@ class _GameCheckerMainState extends State<GameCheckerMain>
     //NotificationService().cancelAllNotifications();
     firstController = FixedExtentScrollController(initialItem: 0);
     _startTutorial(widget.show);
+    _scrollController.addListener(_handleScroll);
     debugPrint("init State");
   }
+
+  void _handleScroll() {
+    if (_resetGamesListSelection != null) {
+      _resetGamesListSelection!();
+    }
+  }
+
+  void _setResetCallback(void Function() resetCallback) {
+    _resetGamesListSelection = resetCallback;
+  }
+
 
   Future<void> _refreshList() async {
     widget.notifyParent();
@@ -530,20 +559,19 @@ class _GameCheckerMainState extends State<GameCheckerMain>
               height: 200,
               child: CupertinoPicker(
                   //backgroundColor: Colors.white.withOpacity(0.6),
-                //backgroundColor: Theme.of(context).primaryColor,
+                  //backgroundColor: Theme.of(context).primaryColor,
                   magnification: 1.2,
                   onSelectedItemChanged: (index) {
                     this.index = index;
                   },
                   itemExtent: 34.0,
                   scrollController:
-                  FixedExtentScrollController(initialItem: index!),
+                      FixedExtentScrollController(initialItem: index!),
                   children: getLocations()
-                      .map((region) =>
-                  new Text(
-                    region.name,
-                    style: TextStyle(color: Colors.black),
-                  ))
+                      .map((region) => new Text(
+                            region.name,
+                            style: TextStyle(color: Colors.black),
+                          ))
                       .toList()));
         }).then((value) {
       if (selectedRegion != getLocations()[index!].name) {
@@ -561,7 +589,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   _showModalSheet() {
     showModalBottomSheet(
       context: context,
-      backgroundColor: Colors.white.withOpacity(0.5),
+      backgroundColor: Colors.grey.withOpacity(0.4),
       barrierColor: Colors.transparent,
       builder: (context) {
         return Container(
@@ -599,7 +627,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                         future: getLocationName(),
                         builder: (context, snapshot) {
                           if (snapshot.hasData) {
-                            print(snapshot.data);
+                            //debugPrint(snapshot.data.toString());
                             return new Container(
                               padding: EdgeInsets.all(10),
                               //margin: EdgeInsets.fromLTRB(10, 10, 10, 10),
@@ -609,7 +637,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                                       onTap: () => _bottomRegionSelection(),
                                       child: Row(
                                           mainAxisAlignment:
-                                          MainAxisAlignment.spaceBetween,
+                                              MainAxisAlignment.spaceBetween,
                                           children: [
                                             Icon(Icons.language,
                                                 color: Colors.black),
@@ -626,8 +654,8 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                                                     flex: 7,
                                                     child: Column(
                                                         crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .end,
+                                                            CrossAxisAlignment
+                                                                .end,
                                                         children: [
                                                           Container(
                                                             alignment: Alignment
@@ -638,7 +666,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                                                               style: TextStyle(
                                                                   fontSize: 17),
                                                               textAlign:
-                                                              TextAlign.end,
+                                                                  TextAlign.end,
                                                             ),
                                                           )
                                                         ]))),
@@ -661,17 +689,20 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   }
 
   GlobalKey refreshKey = GlobalKey();
-  RefreshController refreshController = RefreshController(initialRefresh: false);
-  // Add a separate state for refresh loading
+  RefreshController refreshController =
+      RefreshController(initialRefresh: false);
 
+
+  // Add a separate state for refresh loading
 
   @override
   Widget build(BuildContext context) {
-  // debugPrint("_GameCheckerMainState");
+    // debugPrint("_GameCheckerMainState");
 
     return Scaffold(
       backgroundColor: Colors.white,
       body: CustomScrollView(
+        //controller: _scrollController,
         cacheExtent: cacheExtentSize,
         physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics()),
@@ -680,19 +711,19 @@ class _GameCheckerMainState extends State<GameCheckerMain>
             toolbarHeight: 44,
             //collapsedHeight: 20,
             //expandedHeight: 50.0,
-           floating: true,
+            floating: true,
             pinned: true,
             snap: false,
             //elevation: 0,
-           // forceElevated: true,
+            // forceElevated: true,
             backgroundColor: Colors.white.withOpacity(0.6),
             leading: GestureDetector(
               key: settingKey,
               onTap: () {
                 _showModalSheet();
               },
-              child:
-                  Icon(Icons.settings, color: Color.fromARGB(255, 0, 114, 206)),
+              child: Icon(Icons.settings,
+                  size: 24.0, color: Color.fromARGB(255, 0, 114, 206)),
             ),
             actions: <Widget>[
               Padding(
@@ -719,33 +750,36 @@ class _GameCheckerMainState extends State<GameCheckerMain>
           ),
           CupertinoSliverRefreshControl(
             onRefresh: () async {
-                isRefreshing = true;
-                await Future.delayed(Duration(milliseconds: min((dataLength*200).floor(), 3000)));
-              await widget.notifyParent();
+              isRefreshing = true;
+              await Future.wait<void>([
+                widget.notifyParent(),
+                Future.delayed(Duration(
+                    milliseconds: min((dataLength * 60).floor(), 3000))),
+              ]);
               refreshController.refreshCompleted();
             },
           ),
-
           FutureBuilder<List<Data?>>(
               future: fetchDataV2(false),
               builder: (context, snapshot) {
-                if (!isRefreshing && snapshot.connectionState == ConnectionState.waiting) {
+                if (!isRefreshing &&
+                    snapshot.connectionState == ConnectionState.waiting) {
                   isRefreshing = false;
-                    // Show a spinner while data is loading
-                    return SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Center(
-                          child: LoadingAnimationWidget.staggeredDotsWave(
-                            color: Colors.blue,
-                            size: 35,
-                          ), // Or any other spinner widget
-                        ));
-                  }
+                  // Show a spinner while data is loading
+                  return SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: LoadingAnimationWidget.staggeredDotsWave(
+                          color: Colors.blue,
+                          size: 35,
+                        ), // Or any other spinner widget
+                      ));
+                }
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   isRefreshing = true;
                 }
                 if (snapshot.hasError) {
-                  print(snapshot.error);
+                  debugPrint(snapshot.error.toString());
                   return Text('Error: ${snapshot.error}');
                 }
                 if (snapshot.hasData && snapshot.data!.isNotEmpty) {
@@ -757,6 +791,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                         data: snapshot.data ?? [],
                         notifyParent: widget.notifyParent,
                         refreshList: refreshListButton,
+                        setResetCallback: _setResetCallback,
                       ));
                 }
 
@@ -765,28 +800,28 @@ class _GameCheckerMainState extends State<GameCheckerMain>
                     child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: <Widget>[
-                      IconButton(
-                        key: addKey2,
-                        iconSize: 31,
-                        splashColor: Colors.greenAccent,
-                        icon: const Icon(Icons.add),
-                        color: Colors.green,
-                        onPressed: () async {
-                          await Navigator.of(context).pushNamed('/webView');
-                          isRefreshing= true;
-                          widget.notifyParent();
-                        },
-                      ),
-                      IconButton(
-                        iconSize: 31,
-                        splashColor: Colors.purpleAccent,
-                        color: Colors.deepPurple,
-                        icon: const Icon(Icons.refresh),
-                        onPressed: () {
-                          refreshListButton();
-                        },
-                      )
-                    ]));
+                          IconButton(
+                            key: addKey2,
+                            iconSize: 31,
+                            splashColor: Colors.greenAccent,
+                            icon: const Icon(Icons.add),
+                            color: Colors.green,
+                            onPressed: () async {
+                              await Navigator.of(context).pushNamed('/webView');
+                              isRefreshing = true;
+                              widget.notifyParent();
+                            },
+                          ),
+                          IconButton(
+                            iconSize: 31,
+                            splashColor: Colors.purpleAccent,
+                            color: Colors.deepPurple,
+                            icon: const Icon(Icons.refresh),
+                            onPressed: () {
+                              refreshListButton();
+                            },
+                          )
+                        ]));
               }),
         ],
       ),
@@ -819,5 +854,3 @@ class ImageWrapper extends StatelessWidget {
     );
   }
 }
-
-

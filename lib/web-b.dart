@@ -1,21 +1,21 @@
+import 'dart:async';
+import 'dart:convert';
 import 'dart:ui' as ui;
 import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
+import 'package:html/parser.dart' as parser;
+import 'package:collection/src/iterable_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:fluttertoast/fluttertoast.dart';
-import 'package:html/dom.dart' as dom;
-import 'package:html/parser.dart' as parser;
-import 'package:html/parser.dart';
 import 'package:http/http.dart' as http;
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:ps_check/bottomModalSize.dart';
 import 'package:ps_check/ga.dart';
 import 'package:ps_check/spw.dart';
 import 'package:ps_check/tutorialManager.dart';
-import 'package:ps_check/url-composer.dart';
-import 'package:uuid/uuid.dart';
+import 'package:html/dom.dart' as dom;
 
 import 'bottomSearch.dart';
 import 'hive_wrapper.dart';
@@ -54,13 +54,18 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
   CookieManager cookieManager = CookieManager.instance();
 
   double progress = 0;
-  var gameId;
+
   var showBlankScreen = false;
 
   Future<GameAttributes> saveInDb(Future<dynamic> gameAttributes) async {
     GameAttributes gm = await gameAttributes;
     //showSaveDialog(context);
     await hiveWrapper.putIfNotExist(gm);
+    _showToast(Icons.save, Color(0xC4000000).withOpacity(0.93));
+    return gm;
+  }
+
+  _showToast(IconData icon, Color color) {
     fToast.showToast(
       toastDuration: Duration(milliseconds: 500),
       child: Material(
@@ -76,8 +81,8 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
                 children: [
                   //Text('added', style: TextStyle(fontSize: 20),),
                   Icon(
-                    Icons.save,
-                    color: Color(0xC4000000).withOpacity(0.93),
+                    icon,
+                    color: color,
                     size: 50,
                   )
                 ],
@@ -86,7 +91,6 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
           )),
       gravity: ToastGravity.CENTER,
     );
-    return gm;
   }
 
   @override
@@ -244,6 +248,9 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
                                                 '/latest'
                                             : _url)),
                                     initialSettings: InAppWebViewSettings(
+                                        userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) "
+                                            "AppleWebKit/605.1.15 (KHTML, like Gecko) "
+                                            "Version/16.0 Mobile/15E148 Safari/604.1",
                                         //  useShouldOverrideUrlLoading: true,
                                         allowsBackForwardNavigationGestures:
                                             true),
@@ -251,13 +258,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
                                         (InAppWebViewController controller) {
                                       webView = controller;
                                       webView.clearCache();
-                                      cookieManager.setCookie(
-                                          url: WebUri(
-                                              "https://store.playstation.com"),
-                                          name: "_evidon_consent_cookie",
-                                          value: "date",
-                                          domain: ".playstation.com",
-                                          isHttpOnly: false);
+                                      setCookie2();
                                     },
                                     onLoadStart: (controller, uri) {
                                       setCookie2();
@@ -310,68 +311,180 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
 
   saveGame() async {
     GameAttributes gm = await _prepareAttributes(await webView.getUrl());
-    if (gm.imgUrl == "") {
+
+    //List<Product> addons = await getAddons(await webView.getUrl());
+
+    Data? gameData = await getGameData(gm);
+    if (gameData == null) {
+      _showToast(Icons.dangerous_outlined, Color(0xC4FF1616).withOpacity(0.93));
       return;
     }
-    Map details = await getGameInfo(await webView.getUrl());
-    if (details['size'] > 1) {
-      List<Product> products = (await getOptions(gm))
-          .productRetrieve!
-          .concept!
-          .products!
-          .where((p) => p.webctas!.length > 0)
-          .where((p) => p.webctas![0].type != "CHOOSE_A_VERSION")
-          .where((p) => p.webctas![0].price!.basePrice != null)
-          .toList();
-      if (products.length == 1) {
-        await saveInDb(_prepareAttributes(await webView.getUrl()));
-      } else {
-        for (final product in products) {
-          if (await hiveWrapper.getByIdFromDb(product.id) != null) {
-            product.isSelected = true;
-          }
-        }
-        products.sort((a, b) {
-          if (a.webctas![0].price!.discountedValue == null &&
-              b.webctas![0].price!.discountedValue == null) {
-            return 0;
-          }
-          if (a.webctas![0].price!.discountedValue == null) {
-            return 1;
-          }
-          if (b.webctas![0].price!.discountedValue == null) {
-            return -1;
-          }
-          return a.webctas![0].price!.discountedValue!
-              .compareTo(b.webctas![0].price!.discountedValue!);
-        });
-        showModalSheet(products);
-      }
-    } else {
-      await saveInDb(_prepareAttributes(await webView.getUrl()));
+    if (gameData.products.isEmpty) {
+      _showToast(Icons.dangerous_outlined, Color(0xC4FF1616).withOpacity(0.93));
+      return;
     }
+    if (gameData.products.isNotEmpty && gameData.products.first.media == null) {
+      _showToast(Icons.dangerous_outlined, Color(0xC4FF1616).withOpacity(0.93));
+      return;
+    }
+
+    List<Product> products = gameData.products;
+    if (gameData.products.length == 1) {
+      gm.imgUrl = _getGameImageUrl(products.first);
+      gm.gameId = products.first.productType == ProductType.ADD_ON
+          ? gm.gameId
+          : products.first.id!;
+      gm.type = products.first.productType == ProductType.ADD_ON
+          ? GameType.ADD_ON
+          : GameType.PRODUCT;
+      gm.addon = products.first.productType == ProductType.ADD_ON;
+      await saveInDb(Future.value(gm));
+      return;
+    }
+
+    for (final product in products) {
+      if (await hiveWrapper.getByIdFromDb(product.id) != null) {
+        product.isSelected = true;
+      }
+    }
+
+    products.sort((a, b) {
+      if (a.getDiscountPriceValue() == null &&
+          b.getDiscountPriceValue() == null) {
+        return 0;
+      }
+      if (a.getDiscountPriceValue() == null) {
+        return 1;
+      }
+      if (b.getDiscountPriceValue() == null) {
+        return -1;
+      }
+      return a.getDiscountPriceValue()!.compareTo(b.getDiscountPriceValue()!);
+    });
+    showModalSheet(products);
   }
 
-  Future<Data> getOptions(GameAttributes gm) async {
-    print("start retrieving");
-    http.Response response = await http.Client()
-        .get(getUrl(gm.gameId, gm.type), headers: await getHeader());
-    Game? game = convertToGame(gm);
-    return Future.value(Data.fromJson(response.body, game!));
+  getAddons(WebUri? uri) async {
+    http.Response response = await requestDate(uri);
+    dom.Document document = parser.parse(response.body);
+
+    List<Product> products = [];
+
+    List<dom.Element> links = document
+        .querySelectorAll("section.psw-product-tile__details.psw-m-t-2");
+
+    for (var link in links) {
+      dom.Element? spanName = link.querySelector(
+          "span.psw-t-body.psw-c-t-1.psw-t-truncate-2.psw-m-b-2");
+      String? gameName;
+      if (spanName != null) {
+        gameName = spanName.nodes[0].text;
+      }
+
+      String? price;
+
+      var elementsByClassName = link.getElementsByClassName("psw-m-r-3");
+      if (elementsByClassName.length > 0) {
+        price = elementsByClassName[0].text;
+      }
+
+      String? imageUrl;
+      var querySelector = link.parent!.querySelector("img");
+      if (querySelector != null && querySelector.attributes["src"] != null) {
+        imageUrl = querySelector.attributes["src"].toString().split('?')[0];
+      }
+
+      String? productId;
+      var aTag;
+      var metaJson;
+      if (link.parent != null &&
+          link.parent!.parent != null &&
+          link.parent!.parent!.parent != null) {
+        aTag = link.parent!.parent!.parent!
+            .querySelectorAll("a.psw-link.psw-content-link");
+        if (aTag.length > 0) {
+          metaJson = aTag[0].attributes['data-telemetry-meta'];
+        }
+      }
+      if (metaJson != null) {
+        productId = json.decode(metaJson)["tile"]?["productId"];
+        if (productId == null) {
+          productId = json.decode(metaJson)["productId"];
+        }
+      }
+
+      List<String> platforms = [];
+
+      if (link.parent != null && link.parent!.parent != null) {
+        var platformDivs = link.parent!.parent!.querySelectorAll(
+            "span.psw-platform-tag.psw-p-x-2.psw-l-line-left.psw-t-tag.psw-on-graphic");
+        for (var platform in platformDivs) {
+          platforms.add(platform.text);
+        }
+      }
+      int priceInt = extractNumbers(price);
+
+      if (imageUrl != null &&
+          price != null &&
+          gameName != null &&
+          priceInt != 0) {
+        products.add(Product(
+            media: [Media(role: "MASTER", url: imageUrl)],
+            id: productId,
+            platforms: platforms.length == 0 ? [""] : platforms,
+            name: gameName,
+            price: Price(
+                basePrice: price, basePriceValue: extractNumbers(price))));
+      }
+    }
+    return products;
   }
 
-  Future<Map> getGameInfo(Uri? url) async {
-    print("start retrieving");
-    Map<String, String> headers = {
-      "X-Psn-Store-Locale-Override": await sharedPropWrapper.readRegion()
-    };
-    http.Response response = await http.Client().get(url!, headers: headers);
-    var document = parse(response.body);
-    var details = new Map();
-    details['size'] = document.getElementsByTagName("article").length;
-    details['title'] =
-        document.getElementsByClassName("psw-t-title-m")[0].nodes[0].toString();
-    return details;
+  extractNumbers(String? price) {
+    if (price == null) {
+      return 0;
+    }
+    String clean = price
+        .replaceAll(RegExp(r'[^\d,\.]'), '')
+        .replaceAll(',', '.')
+        .replaceAll(' ', '');
+    if (clean.isEmpty) {
+      return 0;
+    }
+    double value = double.parse(clean) * 100;
+    return value.toInt();
+  }
+
+  Future<Data?> getGameData(GameAttributes gm) async {
+    debugPrint("start retrieving");
+    var conceptId;
+    Data dataProduct;
+    if (gm.type == GameType.PRODUCT) {
+      http.Response response = await requestDate(getUrl(gm.gameId, gm.type));
+      dataProduct = Data.fromJson(json.decode(response.body));
+      if (dataProduct.products.first.productType == ProductType.ADD_ON) {
+        gm.addon = true;
+        gm.type = GameType.ADD_ON;
+        response = await requestDate(getUrl(gm.gameId, gm.type));
+        var data = Data.fromJson(json.decode(response.body));
+        if(data.products.first.media == null) {
+          data.products.first.media = dataProduct.dataMedia;
+        }
+        return data;
+      }
+      conceptId = dataProduct.conceptId;
+    } else {
+      conceptId = gm.gameId;
+    }
+    http.Response response =
+        await requestDate(getUrl(conceptId, GameType.CONCEPT));
+    return Data.fromJson(json.decode(response.body));
+  }
+
+  isIdExist(List products, String id) {
+    return products.firstWhereOrNull((product) => product[id] == id) == null
+        ? false
+        : true;
   }
 
   static Size calcTextSize(String text, TextStyle style) {
@@ -386,9 +499,9 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
   static double getColumnWidth(List<Product> products, double mainTextSize) {
     var textWidth = 0.0;
     products.forEach((pr) {
-      var width = calcTextSize(pr.webctas![0].price!.basePrice!,
-              TextStyle(fontSize: mainTextSize))
-          .width;
+      var width =
+          calcTextSize(pr.price!.basePrice!, TextStyle(fontSize: mainTextSize))
+              .width;
       textWidth = width > textWidth ? width : textWidth;
     });
     return textWidth;
@@ -447,9 +560,9 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
             (paddingHeight * 2);
       }
     });
-    print('#####');
-    print(height);
-    print('#####');
+    debugPrint('#####');
+    debugPrint(height.toString());
+    debugPrint('#####');
 
     return BottomModalSize(
       height: height + MediaQuery.of(context).size.width * 0.2,
@@ -549,8 +662,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
                             MediaQuery.of(context).size.width * 0.012),
                         child: Container(
                           width: sizes.priceWidth,
-                          child: Text(
-                              products[index].webctas![0].price!.basePrice!,
+                          child: Text(products[index].price!.basePrice!,
                               style: TextStyle(fontSize: sizes.mainTextSize)),
                         )),
                   ],
@@ -560,63 +672,37 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
   }
 }
 
-
-
-Uri getUrl(String id, GameType type) {
-  switch (type) {
-    case GameType.PRODUCT:
-      return ApiUrlComposer.composeUrl(
-          id: id,
-          type:type,
-          operationName: "productRetrieveForUpsellWithCtas",
-          sha256Hash: "fb0bfa0af4d8dc42b28fa5c077ed715543e7fb8a3deff8117a50b99864d246f1");
-    case GameType.CONCEPT:
-    return ApiUrlComposer.composeUrl(
-        id: id,
-        type:type,
-        operationName: "conceptRetrieveForUpsellWithCtas",
-        sha256Hash: "278822e6c6b9f304e4c788867b3e8a448c67847ac932d09213d5085811be3a18");
-      ;
-  }
-}
-
 _prepareAttributes(Uri? futureUrl) async {
-  return new GameAttributes(
-      gameId: await _getGameId(futureUrl),
-      imgUrl: await _getGameImageUrl(futureUrl),
-      type: (await _getType(futureUrl)),
-      url: (await futureUrl).toString());
+  return GameAttributes(
+      gameId: _getGameId(futureUrl),
+      type: _getType(futureUrl),
+      url: futureUrl.toString(),
+      addon: false);
 }
 
 _prepareAttributesFromProduct(Product product) async {
   String region = await sharedPropWrapper.readRegion();
-  return new GameAttributes(
+  return GameAttributes(
       gameId: product.id!,
-      imgUrl:
-          product.media!.firstWhere((m) => m.role == "MASTER").url! + "?w=250",
-      type: GameType.PRODUCT,
+      imgUrl: _getGameImageUrl(product),
+      type: product.productType == ProductType.ADD_ON
+          ? GameType.ADD_ON
+          : GameType.PRODUCT,
+      addon: product.productType == ProductType.ADD_ON,
+      conceptId: product.conceptId,
       url: "https://store.playstation.com/$region/product/" + product.id!);
 }
 
-_getGameImageUrl(Uri? futureUrl) async {
-  Uri url = futureUrl!;
-  final response = await http.get(url);
-  dom.Document document = parser.parse(response.body);
-  //gameBackgroundImage#tileImage#image
-  var imgElement = document
-      .querySelector('img[data-qa="gameBackgroundImage#heroImage#preview"]');
-  if (imgElement == null) {
-    imgElement = document
-        .querySelector('img[data-qa="gameBackgroundImage#tileImage#preview"]');
+_getGameImageUrl(Product product) {
+  Media? image =
+      product.media?.firstWhereOrNull((m) => m.role == "PORTRAIT_BANNER");
+  if (image == null) {
+    image = product.media?.firstWhereOrNull((m) => m.role == "MASTER");
   }
-  if (imgElement == null) {
-    return "";
-  }
-  String imageUrl = imgElement.attributes['src']!;
-  return imageUrl.substring(0, imageUrl.indexOf("?")) + "?w=250";
+  return image!.url! + "?w=250";
 }
 
-_getGameId(Uri? url) async {
+_getGameId(Uri? url) {
   var urlList = url.toString().split('/');
   if (urlList.last.isEmpty) {
     return urlList[urlList.length - 2];
@@ -624,7 +710,7 @@ _getGameId(Uri? url) async {
   return urlList.last;
 }
 
-_getType(Uri? url) async {
+_getType(Uri? url) {
   var str = url!.toString();
   if (str.substring(str.length - 1, str.length) == '/') {
     str = str.substring(0, str.length - 1);
@@ -634,51 +720,6 @@ _getType(Uri? url) async {
     return GameType.CONCEPT;
   }
   return GameType.PRODUCT;
-}
-
-showSaveDialog(var context) {
-  showDialog(
-      context: context,
-      barrierColor: Colors.black26,
-      builder: (dialogContext) {
-        Future.delayed(Duration(milliseconds: 400), () {
-          Navigator.of(context).pop(true);
-        });
-        return Dialog(
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(0.0)),
-            backgroundColor: Colors.white.withOpacity(0.93),
-            // insetPadding: EdgeInsets.symmetric(horizontal: 160),
-            elevation: 0,
-            insetPadding: EdgeInsets.zero,
-            child: Stack(
-              //clipBehavior: Clip.antiAlias,
-              alignment: Alignment.topCenter,
-              children: [
-                //   new BackdropFilter(
-                // filter: new ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
-                //  child:
-                Container(
-                  width: double.infinity,
-                  height: 55,
-                  child: Padding(
-                    // padding: const EdgeInsets.fromLTRB(10, 20, 10, 10),
-                    padding: const EdgeInsets.all(2),
-                    child: Column(
-                      children: [
-                        //Text('added', style: TextStyle(fontSize: 20),),
-                        Icon(
-                          Icons.save,
-                          color: Color(0xC4000000).withOpacity(0.93),
-                          size: 50,
-                        )
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ));
-      });
 }
 
 class MyBottomAppBar extends StatefulWidget {
@@ -716,8 +757,7 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
   Widget build(BuildContext context) {
     double screenHeight = MediaQuery.of(context).size.height;
     double screenWidth = MediaQuery.of(context).size.width;
-    double appBarHeight = screenHeight * 0.1;
-    //  print(screenHeight);
+    double appBarHeight = screenHeight * 0.085;
     double iconSizeBtn = screenHeight * 0.0285;
     var left = (screenWidth / 5 - iconSizeBtn - 15) / 2;
     var right = (screenWidth / 5 - iconSizeBtn - 15) / 2;
@@ -826,7 +866,7 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
                         tappedBtn5 = false;
                       });
                     });
-                    _showModalSheet();
+                    _showSearchModalSheet();
                   },
                   child: Container(
                       decoration: BoxDecoration(
@@ -895,7 +935,7 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
     );
   }
 
-  _showModalSheet() {
+  _showSearchModalSheet() {
     showModalBottomSheet(
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
@@ -905,10 +945,8 @@ class _MyBottomAppBarState extends State<MyBottomAppBar> {
         isScrollControlled: true,
         context: context,
         builder: (context) {
-          // print(" parent search text: $searchText");
           return StatefulBuilder(
               builder: (BuildContext context, StateSetter setState) {
-            //print(" parent search text: $searchText");
             return SearchBottomScreen(
               searchText: searchText,
               onUrlChange: (String url) {

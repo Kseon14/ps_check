@@ -42,7 +42,6 @@ class _WebViewContainerState extends State<WebViewContainer> {
     });
   }
 
-
   void setCookie2() async {
     await cookieManager.setCookie(
       url: WebUri('https://store.playstation.com'),
@@ -107,7 +106,7 @@ class _WebViewContainerState extends State<WebViewContainer> {
                     return ServerTrustAuthResponse(action: ServerTrustAuthResponseAction.PROCEED);
                   },
                   onConsoleMessage: (controller, consoleMessage) {
-                    print("Console Message: ${consoleMessage.message}");
+                    debugPrint("Console Message: ${consoleMessage.message}");
                   },
                   onLoadStop: (InAppWebViewController controller, Uri? url) async {
                     if (url != null && url.toString().contains("/**/error")) {

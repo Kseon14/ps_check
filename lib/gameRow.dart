@@ -1,5 +1,6 @@
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import 'main.dart';
 import 'model.dart';
@@ -38,7 +39,7 @@ class GameRowItem extends StatelessWidget {
                           // This line is already uncommented
                           mainAxisAlignment: MainAxisAlignment.start,
                           // Add this line
-                          children: _showText(data!.productRetrieve!),
+                          children: _showText(data!.products.first),
                         ))
                       ]))
             ],
@@ -46,19 +47,25 @@ class GameRowItem extends StatelessWidget {
         ));
   }
 
-  _showText(ProductRetrieve productRetrieve) {
+  _showText(Product product) {
     var textItems = <Widget>[];
     textItems.add(AutoSizeText(
-      productRetrieve.name!,
+      product.name!,
       style: _getTextStyle(),
       maxLines: 3,
       maxFontSize: 14,
     ));
+    if (product.releaseDate != null) {
+      final formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
+      String formattedDate = formatter.format(product.releaseDate!);
+      textItems.add(AutoSizeText('release: ' + formattedDate,
+          style: TextStyle(fontSize: 14), maxFontSize: 15));
+    }
 
-    if (productRetrieve.webctas![0].price!.basePrice != null) {
-      if (isDiscountExist(productRetrieve)) {
+    if (product.getBasePrice() != null) {
+      if (isDiscountExist(product)) {
         textItems.add(AutoSizeText(
-          productRetrieve.webctas![0].price!.basePrice!,
+          product.getBasePrice(),
           style: TextStyle(
             decoration: TextDecoration.lineThrough,
             fontSize: 15,
@@ -66,14 +73,13 @@ class GameRowItem extends StatelessWidget {
           ),
           maxFontSize: 15,
         ));
-        textItems.add(AutoSizeText(
-            productRetrieve.webctas![0].price!.discountedPrice!,
+        textItems.add(AutoSizeText(product.getDiscountedPrice(),
             style: TextStyle(
                 fontSize: 15, fontWeight: FontWeight.w500, color: Colors.red),
             maxFontSize: 15));
       } else {
         textItems.add(AutoSizeText(
-          productRetrieve.webctas![0].price!.basePrice!,
+          product.getBasePrice(),
           style: TextStyle(
             fontSize: 15,
             fontWeight: FontWeight.w500,
