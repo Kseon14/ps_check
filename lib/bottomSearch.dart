@@ -93,17 +93,18 @@ class _SearchBottomScreenState extends State<SearchBottomScreen> {
     //If the http request is successful the statusCode will be 200
     if (response.statusCode == 200) {
       var document = parse(response.body);
-      var nameElements = document.getElementsByClassName(
-          "psw-t-body psw-c-t-1 psw-t-truncate-2 psw-m-b-2");
-
+      var nameElements = document.querySelectorAll('a[data-track="web:store:product-tile"]');
       nameElements.forEach((element) async {
-        var aElement = element.parentNode?.parentNode?.parentNode;
+      //  var aElement = element.parentNode?.parentNode?.parentNode;
         // var imgElement = aElement?.nodes[0].nodes[0].nodes[0].nodes[1].nodes[1];
-        var partOfUrl = aElement?.attributes["href"].toString();
+        var partOfUrl = element.attributes["href"].toString();
         var baseUrl = getBaseUrl();
         var gameUrl = "$baseUrl$partOfUrl";
+        var productNameSpan = element.querySelector('#product-name');
+        var name = productNameSpan?.text.trim() ?? '';
+
         var searchResult = new SearchResult(
-            name: removeFirstAndLast(element.nodes[0].toString()),
+            name: name,
             url: gameUrl,
             imgUrl: "img");
         searchResults.add(searchResult);

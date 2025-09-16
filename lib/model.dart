@@ -1,5 +1,6 @@
 
 import 'package:flutter/cupertino.dart';
+import 'package:collection/collection.dart';
 
 class Data {
   List<Product> products;
@@ -99,8 +100,7 @@ class Product{
   bool? isSelected = false;
   ProductType? productType;
   String? conceptId;
-
-  DateTime? releaseDate;
+  String? releaseDate;
 
   Product({this.media,
     this.platforms,
@@ -119,7 +119,7 @@ class Product{
         'name: $name, '
         'price: $price, '
         'releaseDate: $releaseDate, '
-        'productType: $releaseDate, '
+        'productType: $productType, '
         'conceptId: $conceptId, '
         'isSelected: $isSelected}';
   }
@@ -132,8 +132,9 @@ class Product{
     Price? price;
     if (json['webctas'] != null && json['webctas'] is List) {
       List<dynamic> webctasList = json['webctas'];
-      if (webctasList.isNotEmpty) {
-        price = Price.fromJson(webctasList.first["price"]);
+      var priceJson = firstWithNoneBranding(webctasList);
+      if(priceJson != null) {
+        price = Price.fromJson(priceJson);
       }
     }
 
@@ -145,22 +146,35 @@ class Product{
         ?.map((item) => Media.fromJson(item))
         .toList();
 
-
-     DateTime? releaseDate;
-    if (json['releaseDate'] != null) {
-      releaseDate = DateTime.tryParse(json['releaseDate']);
-    }
-
     return Product(
       platforms: platforms,
       media: media,
       price: price,
       id: json['id'] as String?,
       name: json['name'] as String?,
-      releaseDate: releaseDate,
       productType: productType,
       conceptId: conceptId,
     );
+  }
+
+  static Map<String, dynamic>? firstWithNoneBranding(List<dynamic> webctasList) {
+    Map<String, dynamic>? firstPrice; // fallback
+
+    for (final item in webctasList) {
+      if (item is! Map) continue;
+
+      final priceRaw = item['price'];
+      if (priceRaw is! Map) continue;
+
+      final price = Map<String, dynamic>.from(priceRaw);
+      firstPrice ??= price;
+
+      final branding = price['serviceBranding'];
+      if (branding is List && branding.contains('NONE')) {
+        return price;
+      }
+    }
+    return firstPrice;
   }
 
 
@@ -227,11 +241,12 @@ class Price {
   final int? discountedValue;
   final int? basePriceValue;
   final bool? isFree;
+  final List<String>? serviceBranding;
   late final DateTime? endTime;
 
   Price(
       {this.basePrice, this.discountText, this.discountedPrice, this.endTime,
-        this.basePriceValue, this.discountedValue, this.isFree});
+        this.basePriceValue, this.discountedValue, this.isFree, this.serviceBranding});
 
   static Price? fromJson(Map<String, dynamic> json) {
    var isFree = json['isFree'];
@@ -243,6 +258,9 @@ class Price {
         discountedPrice:  json['discountedPrice'],
         discountedValue: isFree? 0: json['discountedValue'],
         basePriceValue: isFree? 0: json['basePriceValue'],
+        serviceBranding: (json['serviceBranding'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
         isFree:  isFree,
         endTime: (json['endTime'] == null
             ? null

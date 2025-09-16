@@ -23,13 +23,14 @@ class GameAttributesAdapter extends TypeAdapter<GameAttributes> {
       url: fields[4] as String,
       conceptId: fields[5] as String?,
       addon: fields[6] as bool?,
+      releaseDate: fields[7] as String?,
     )..discountedValue = fields[3] as int?;
   }
 
   @override
   void write(BinaryWriter writer, GameAttributes obj) {
     writer
-      ..writeByte(7)
+      ..writeByte(8)
       ..writeByte(0)
       ..write(obj.gameId)
       ..writeByte(1)
@@ -43,7 +44,9 @@ class GameAttributesAdapter extends TypeAdapter<GameAttributes> {
       ..writeByte(5)
       ..write(obj.conceptId)
       ..writeByte(6)
-      ..write(obj.addon);
+      ..write(obj.addon)
+      ..writeByte(7)
+      ..write(obj.releaseDate);
   }
 
   @override
@@ -70,6 +73,8 @@ class GameTypeAdapter extends TypeAdapter<GameType> {
         return GameType.CONCEPT;
       case 2:
         return GameType.ADD_ON;
+      case 3:
+        return GameType.CONCEPT_PRE_ORDER;
       default:
         return GameType.PRODUCT;
     }
@@ -86,6 +91,9 @@ class GameTypeAdapter extends TypeAdapter<GameType> {
         break;
       case GameType.ADD_ON:
         writer.writeByte(2);
+        break;
+      case GameType.CONCEPT_PRE_ORDER:
+        writer.writeByte(3);
         break;
     }
   }

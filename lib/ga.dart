@@ -21,6 +21,8 @@ class GameAttributes extends HiveObject {
   String? conceptId;
   @HiveField(6)
   bool? addon;
+  @HiveField(7)
+  String? releaseDate;
 
 
   GameAttributes({ required this.gameId,
@@ -28,7 +30,8 @@ class GameAttributes extends HiveObject {
     required this.type,
     required this.url,
     this.conceptId,
-    this.addon});
+    this.addon,
+    this.releaseDate});
 
 
   @override
@@ -39,6 +42,7 @@ class GameAttributes extends HiveObject {
         'url: $url,\n'
         'conceptId: $conceptId, \n'
         'addon: $addon, \n'
+        'releaseDate: $releaseDate, \n'
         '}\n';
   }
 
@@ -49,6 +53,7 @@ class GameAttributes extends HiveObject {
         discountedValue = json["discountedValue"],
         conceptId = json["conceptId"],
         addon = json["addon"],
+        releaseDate = json["releaseDate"],
         url = json["url"];
 
   Map<String, dynamic> toJson() => {
@@ -59,6 +64,7 @@ class GameAttributes extends HiveObject {
     "conceptId": conceptId,
     "addon": addon,
     "url": url,
+    "releaseDate": releaseDate,
   };
 }
 
@@ -69,5 +75,33 @@ class GameAttributes extends HiveObject {
   @HiveField(1)
   CONCEPT,
   @HiveField(2)
-  ADD_ON
+  ADD_ON,
+  @HiveField(3)
+  CONCEPT_PRE_ORDER
+}
+
+extension GameAttributesSql on GameAttributes {
+  Map<String, Object?> toMap() => {
+    'gameId': gameId,
+    'type': type.name,               // PRODUCT / CONCEPT / ADD_ON
+    'imgUrl': imgUrl,
+    'discountedValue': discountedValue,
+    'url': url,
+    'conceptId': conceptId,
+    'releaseDate': releaseDate,
+    'addon': (addon ?? false) ? 1 : 0,
+  };
+
+  static GameAttributes fromMap(Map<String, Object?> m) {
+    final t = (m['type'] as String);
+    return GameAttributes(
+      gameId: m['gameId'] as String,
+      type: GameType.values.firstWhere((e) => e.name == t, orElse: () => GameType.PRODUCT),
+      imgUrl: m['imgUrl'] as String?,
+      url: m['url'] as String,
+      releaseDate: m["releaseDate"] as String?,
+      conceptId: m['conceptId'] as String?,
+      addon: (m['addon'] as int?) == 1,
+    )..discountedValue = (m['discountedValue'] as int?);
+  }
 }

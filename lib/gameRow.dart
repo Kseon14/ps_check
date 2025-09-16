@@ -49,19 +49,23 @@ class GameRowItem extends StatelessWidget {
 
   _showText(Product product) {
     var textItems = <Widget>[];
+    if (product.releaseDate != null) {
+      // textItems.add(const SizedBox(height: 6));
+      final formatter = DateFormat('dd.MM.yyyy');
+      var releaseDate = DateTime.parse(product.releaseDate!);
+      final nowUtc = DateTime.now().toUtc();
+      if (releaseDate.isAfter(nowUtc)) {
+        String formattedDate = formatter.format(releaseDate);
+        textItems.add(AutoSizeText(formattedDate,
+            style: TextStyle(fontSize: 13), maxFontSize: 15));
+      }
+    }
     textItems.add(AutoSizeText(
       product.name!,
       style: _getTextStyle(),
       maxLines: 3,
       maxFontSize: 14,
     ));
-    if (product.releaseDate != null) {
-      final formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
-      String formattedDate = formatter.format(product.releaseDate!);
-      textItems.add(AutoSizeText('release: ' + formattedDate,
-          style: TextStyle(fontSize: 14), maxFontSize: 15));
-    }
-
     if (product.getBasePrice() != null) {
       if (isDiscountExist(product)) {
         textItems.add(AutoSizeText(
@@ -88,6 +92,7 @@ class GameRowItem extends StatelessWidget {
         ));
       }
     }
+
     return textItems;
   }
 

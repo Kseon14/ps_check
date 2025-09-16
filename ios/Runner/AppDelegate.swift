@@ -1,7 +1,7 @@
 import UIKit
 import Firebase
 import Flutter
-import workmanager
+import workmanager_apple
 
 import flutter_local_notifications
 
