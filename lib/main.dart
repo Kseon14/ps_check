@@ -13,11 +13,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_app_badger/flutter_app_badger.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:ps_check/ga.dart';
 import 'package:ps_check/model.dart';
 import 'package:ps_check/notification_service.dart';
 import 'package:ps_check/spw.dart';
+import 'package:ps_check/sql_light_wrapper.dart';
 import 'package:ps_check/theme.dart';
 import 'package:ps_check/tutorialManager.dart';
 import 'package:ps_check/url-composer.dart';
@@ -26,8 +28,11 @@ import 'package:pull_to_refresh/pull_to_refresh.dart';
 import 'package:workmanager/workmanager.dart';
 import 'gameList.dart';
 import 'hive_wrapper.dart';
+import 'package:pool/pool.dart';
+import 'package:collection/collection.dart';
 
 var hiveWrapper = HiveWrapper.instance();
+final sqlWrapper = SqlWrapper.instance();
 var sharedPropWrapper = SharedPropWrapper.instance();
 var theme = ThemeInt.instance();
 bool isActionInProgress = false;
@@ -77,6 +82,13 @@ Uri getUrl(String id, GameType type) {
           operationName: "conceptRetrieveForUpsellWithCtas",
           sha256Hash:
               "278822e6c6b9f304e4c788867b3e8a448c67847ac932d09213d5085811be3a18");
+    case GameType.CONCEPT_PRE_ORDER:
+      return ApiUrlComposer.composeUrl(
+          id: id,
+          type: GameType.CONCEPT,
+          operationName: "conceptRetrieveForCtasWithPrice",
+          sha256Hash:
+          "eab9d873f90d4ad98fd55f07b6a0a606e6b3925f2d03b70477234b79c1df30b5");
   }
 }
 
@@ -88,138 +100,184 @@ bool isRefreshing = false;
 
 final GlobalKey<AnimatedListState> listKey = GlobalKey();
 
+class HttpClients {
+  static final HttpClient _hc = HttpClient()
+    ..maxConnectionsPerHost = 4
+    ..idleTimeout = const Duration(seconds: 15)
+    ..connectionTimeout = const Duration(seconds: 10);
+
+  static final IOClient shared = IOClient(_hc);
+}
+
+Future<http.Response?> _getWithRetry(Uri uri,
+    {int maxRetries = 2}) async {
+  final rand = Random();
+  int attempt = 0;
+  while (true) {
+    try {
+      final res = await requestDate(uri);
+      if (res.statusCode == 200) return res;
+      // Server error; retry a bit
+      if (attempt >= maxRetries) return res;
+    } catch (e) {
+      if (attempt >= maxRetries) return null;
+    }
+    final backoffMs = (400 * pow(2, attempt)).toInt() + rand.nextInt(250);
+    await Future.delayed(Duration(milliseconds: backoffMs));
+    attempt++;
+  }
+}
+
 Future<List<Data?>> fetchDataV2(bool fromNotification) async {
   isActionInProgress = true;
-  debugPrint("fetching data....");
-  List<GameAttributes> gms = await hiveWrapper.readFromDb();
-  List<Data?> dates = [];
+  try {
+    final gms = await sqlWrapper.readFromDb();
+    debugPrint("fetching data.... count=${gms.length}");
+    if (gms.isEmpty) return <Data?>[];
 
-  if (gms.isNotEmpty) {
-    dates = await Future.wait(gms.map((gm) async {
-      http.Response? response;
-      for (int attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-          if (gm.conceptId == null || gm.addon == null) {
-            if (gm.type == GameType.CONCEPT) {
-              gm.conceptId = gm.gameId;
-            } else {
-              http.Response tmpResponse =
-                  await requestDate(getUrl(gm.gameId, gm.type));
-              if (tmpResponse.statusCode == 200) {
-                var responseBody = json.decode(tmpResponse.body);
-                if (responseBody["errors"] != null) {
-                  return Data(products: [
-                    Product(
-                        name: "❌ The game was removed or its location was changed by a PS Store initiative\nPlease re-add.")
-                  ], imageUrl: gm.imgUrl, url: gm.url);
-                }
+    final pool = Pool(4); // limit concurrency
+    final results = <Future<Data?>>[];
 
-                Data data = Data.fromJson(responseBody);
-                if (data.products.isNotEmpty) {
-                  gm.conceptId = data.conceptId;
-                  if (data.products.first.productType != null &&
-                      data.products.first.productType == ProductType.ADD_ON) {
-                    gm.type = GameType.ADD_ON;
-                    gm.addon = true;
-                  }
-                }
-                hiveWrapper.save(gm);
+    for (final gm in gms) {
+      results.add(pool.withResource(() async {
+        debugPrint("fetching data for ${gm.gameId}....");
+
+        // ensure concept/addon
+        if (gm.conceptId == null || gm.addon == null) {
+          if (gm.type == GameType.CONCEPT) {
+            gm.conceptId = gm.gameId;
+          } else {
+            http.Response? tmpResponse =
+            await _getWithRetry(getUrl(gm.gameId, gm.type));
+            if (tmpResponse == null || tmpResponse.statusCode != 200) {
+              debugPrint(
+                  'bootstrap fetch failed for ${gm.gameId} status=${tmpResponse?.statusCode}');
+              return null;
+            }
+
+            var responseBody = json.decode(tmpResponse.body);
+            if (responseBody["errors"] != null) {
+              debugPrint("errors for ${gm.gameId}: ${responseBody["errors"]}");
+              return Data(
+                products: [
+                  Product(
+                      name:
+                      "❌ The game was removed or moved by PS Store, please re-add.")
+                ],
+                imageUrl: gm.imgUrl,
+                url: gm.url,
+              );
+            }
+
+            Data data = Data.fromJson(responseBody);
+            if (data.products.isNotEmpty) {
+              gm.conceptId = data.conceptId;
+              if (data.products.first.productType == ProductType.ADD_ON) {
+                gm.type = GameType.ADD_ON;
+                gm.addon = true;
+              }
+            }
+            await sqlWrapper.save(gm);
+          }
+        }
+
+        // main fetch
+        final uri = getUrl(
+          gm.addon == true ? gm.gameId : (gm.conceptId ?? gm.gameId),
+          gm.addon == true ? GameType.ADD_ON : GameType.CONCEPT,
+        );
+        final response = await _getWithRetry(uri);
+        if (response == null || response.statusCode != 200) {
+          debugPrint(
+              'main fetch failed for ${gm.gameId} status=${response?.statusCode}');
+          return null;
+        }
+
+        Data data = Data.fromJson(json.decode(response.body))
+          ..imageUrl = gm.imgUrl
+          ..url = gm.url;
+
+        // release date fetch
+        if (data.conceptId != null) {
+          http.Response? relRes = await _getWithRetry(
+              getUrl(data.conceptId!, GameType.CONCEPT_PRE_ORDER),
+              maxRetries: 1);
+          if (relRes != null && relRes.statusCode == 200) {
+            final body = json.decode(relRes.body);
+            final concept = body["data"]?["conceptRetrieve"];
+            final type = concept?["releaseDate"]?["type"];
+            final date = concept?["releaseDate"]?["value"];
+            if (type == "DAY_MONTH_YEAR" && date != null) {
+              final releaseDate = DateTime.tryParse(date);
+              if (releaseDate != null &&
+                  releaseDate.isAfter(DateTime.now().toUtc())) {
+                gm.releaseDate =
+                    releaseDate.toLocal().toIso8601String().split('T').first;
               }
             }
           }
+        }
 
-          debugPrint("fetching data for ${gm.gameId}....");
-          response = await requestDate(getUrl(
-              gm.addon == true ? gm.gameId : gm.conceptId!,
-              gm.addon == true ? GameType.ADD_ON : GameType.CONCEPT));
-          if (response.statusCode == 200) {
-            break;
-          } else {
-            debugPrint('Server error: ${response.statusCode} on attempt '
-                '$attempt for game ${gm.url}');
+        // pick selected product
+        final selected =
+        data.products.firstWhereOrNull((p) => p.id == gm.gameId);
+        if (selected == null) {
+          debugPrint("No matching product found for ${gm.gameId}");
+          return null;
+        }
+
+        debugPrint('Selected Product: ${selected.name}');
+        selected.releaseDate = gm.releaseDate;
+        Data gameInfo = Data(
+            products: [selected], imageUrl: gm.imgUrl!, url: gm.url);
+
+        if (!fromNotification) {
+          if (await isPriceLessThenSaved(selected, gm)) {
+            gm.discountedValue = selected.getDiscountPriceValue();
+            debugPrint(
+                "updated discountedValue for ${gm.gameId} -> ${gm.discountedValue}");
           }
-        } catch (e, stacktrace) {
-          debugPrint(
-              'Network error: $e on attempt $attempt for game ${gm.url}');
-          debugPrint('Stacktrace: $stacktrace');
-          await Future.delayed(Duration(seconds: 2));
         }
+        await sqlWrapper.save(gm);
+        return gameInfo;
+      }));
+    }
+
+    final dates = (await Future.wait(results)).whereType<Data>().toList();
+    debugPrint("Fetched ${dates.length}/${gms.length} successfully");
+
+    // sort unchanged
+    dates.sort((a, b) {
+      final ap = a.products.first;
+      final bp = b.products.first;
+      final aPrice = ap.getDiscountPriceValue();
+      final bPrice = bp.getDiscountPriceValue();
+
+      int compareIds(String? x, String? y) {
+        if (x == null && y == null) return 0;
+        if (x == null) return -1;
+        if (y == null) return 1;
+        return x.compareTo(y);
       }
 
-      if (response == null || response.statusCode != 200) {
-        return null;
-      }
+      if (aPrice == null && bPrice == null) return compareIds(ap.id, bp.id);
+      if (aPrice == null) return -1;
+      if (bPrice == null) return 1;
+      if (aPrice == 0 && bPrice == 0) return compareIds(ap.id, bp.id);
+      if (aPrice == 0) return 1;
+      if (bPrice == 0) return -1;
 
-      Data data = Data.fromJson(json.decode(response.body));
-      data.imageUrl = gm.imgUrl;
-      data.url = gm.url;
+      final cmp = aPrice.compareTo(bPrice);
+      return cmp != 0 ? cmp : compareIds(ap.id, bp.id);
+    });
 
-      List<Product> products = data.products;
-
-      // if(gm.type == GameType.CONCEPT && products.length == 1){
-      //   gm.type = GameType.PRODUCT;
-      //   gm.gameId = products.first.id!;
-      //  // hiveWrapper.save(gm);
-      // }
-
-      Product? selectedProduct =
-          products.firstWhereOrNull((product) => product.id == gm.gameId);
-
-      if (selectedProduct != null) {
-        debugPrint('Selected Product: ${selectedProduct.name}');
-      } else {
-        debugPrint('No matching product found for ${gm.gameId}');
-        return null;
-      }
-      Data gameInfo =
-          Data(products: [selectedProduct], imageUrl: gm.imgUrl!, url: gm.url);
-      if (!fromNotification) {
-        if (await isPriceLessThenSaved(selectedProduct, gm)) {
-          gm.discountedValue = selectedProduct.getDiscountPriceValue();
-        }
-      }
-      hiveWrapper.save(gm);
-      return gameInfo;
-    }));
-
-    // debugPrint("GameAttributesOB: $gms");
-    // debugPrint("data: $dates");
+    dataLength = dates.length;
+    return dates;
+  } finally {
+    isActionInProgress = false;
   }
-
-  dates = dates.where((data) => data != null).toList();
-  dates.sort((a, b) {
-    var aProduct = a!.products.first;
-    var bProduct = b!.products.first;
-    var aPrice = aProduct.getDiscountPriceValue();
-    var bPrice = bProduct.getDiscountPriceValue();
-
-    if (aPrice == null && bPrice == null) {
-      return 0;
-    }
-    if (aPrice == null) {
-      return -1;
-    }
-    if (bPrice == null) {
-      return 1;
-    }
-
-    if (aPrice == 0 && bPrice == 0) {
-      return 0;
-    }
-    if (aPrice == 0) {
-      return 1; // a should come last
-    }
-
-    // Case 5: bPrice is 0, aPrice is not
-    if (bPrice == 0) {
-      return -1; // b should come last
-    }
-    return aPrice.compareTo(bPrice);
-  });
-  dataLength = dates.length;
-  isActionInProgress = false;
-  return dates;
 }
+
 
 isDiscountExist(Product product) {
   if (product.getDiscountPriceValue() == null) {
@@ -243,7 +301,7 @@ isPriceLessThenSaved(Product product, GameAttributes gameAttributes) async {
     debugPrint("gameAttributes.discountedValue is null");
     debugPrint(
         "gameAttributes.discountedValue now ${gameAttributes.discountedValue}");
-    await hiveWrapper.save(gameAttributes);
+    await sqlWrapper.save(gameAttributes);
     return false;
   }
   if (product.getDiscountPriceValue() > gameAttributes.discountedValue!) {
@@ -252,7 +310,7 @@ isPriceLessThenSaved(Product product, GameAttributes gameAttributes) async {
     debugPrint("${product.getDiscountPriceValue()} more then"
         "${gameAttributes.discountedValue}");
     debugPrint("gameAttributes.discountedValue less then in data");
-    await hiveWrapper.save(gameAttributes);
+    await sqlWrapper.save(gameAttributes);
     return false;
   }
 
@@ -261,7 +319,7 @@ isPriceLessThenSaved(Product product, GameAttributes gameAttributes) async {
     debugPrint("gameAttributes.discountedValue more then in data");
     debugPrint("${product.getDiscountPriceValue()} less then"
         "${gameAttributes.discountedValue}");
-    await hiveWrapper.save(gameAttributes);
+    await sqlWrapper.save(gameAttributes);
     return true;
   }
   return false;
@@ -279,6 +337,8 @@ void main() async {
   debugPrint("init");
 
   await hiveWrapper.init();
+  await sqlWrapper.migrateFromHiveIfNeeded(hiveWrapper);
+
   await NotificationService().init();
   Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
 
@@ -289,10 +349,10 @@ void main() async {
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     debugPrint('notification payload: $task');
-    //await hiveWrapper.close();
+    //await sqlWrapper.close();
     await hiveWrapper.init();
     List<Data?> datas = await fetchDataV2(true);
-    List<GameAttributes> gameAttributes = await hiveWrapper.readFromDb();
+    List<GameAttributes> gameAttributes = await sqlWrapper.readFromDb();
     var badgeCount = 0;
     for (final data in datas) {
       if (data == null || data.products.isEmpty) {
@@ -306,8 +366,8 @@ void callbackDispatcher() {
 
       if (gm!.discountedValue == null) {
         gm.discountedValue = product.getDiscountPriceValue();
-        await hiveWrapper.save(gm);
-        //hiveWrapper.put(gm);
+        await sqlWrapper.save(gm);
+        //sqlWrapper.put(gm);
         debugPrint("gameAttributes.discountedValue is null");
         debugPrint("gameAttributes.discountedValue now ${gm.discountedValue}");
       }
@@ -316,15 +376,15 @@ void callbackDispatcher() {
       }
       if (product.getDiscountPriceValue()! > gm.discountedValue!) {
         gm.discountedValue = product.getDiscountPriceValue();
-        await hiveWrapper.save(gm);
+        await sqlWrapper.save(gm);
         debugPrint("gameAttributes.discountedValue less then in data");
         debugPrint("${product.getDiscountPriceValue()} more then"
             "${gm.discountedValue}");
       }
       if (product.getDiscountPriceValue() < gm.discountedValue!) {
         gm.discountedValue = product.getDiscountPriceValue();
-        await hiveWrapper.save(gm);
-        //hiveWrapper.put(gm);
+        await sqlWrapper.save(gm);
+        //sqlWrapper.put(gm);
         debugPrint("gameAttributes.discountedValue more then in data");
         debugPrint("${product.getDiscountPriceValue()} less then"
             "${gm.discountedValue}");
@@ -333,7 +393,7 @@ void callbackDispatcher() {
       }
       FlutterAppBadger.updateBadgeCount(badgeCount);
     }
-    await hiveWrapper.flush();
+    await sqlWrapper.flush();
     return Future.value(true);
   });
 }
@@ -467,7 +527,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
   @override
   void dispose() async {
     WidgetsBinding.instance.removeObserver(this);
-    await hiveWrapper.close();
+    await sqlWrapper.close();
     _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
@@ -491,7 +551,7 @@ class _GameCheckerMainState extends State<GameCheckerMain>
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
         debugPrint("state: paused");
-        hiveWrapper.flush();
+        sqlWrapper.flush();
         break;
       default:
         debugPrint("state: default");

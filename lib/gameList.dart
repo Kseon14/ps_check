@@ -52,7 +52,12 @@ class _GamesListState extends State<GamesList> {
 
   void _removeItem(int index) {
     setState(() {
-      hiveWrapper.removeFromDb(widget.data[index]!.products.first.id!);
+      try {
+        hiveWrapper.removeFromDb(widget.data[index]!.products.first.id!);
+      } catch (e) {
+      debugPrint('hive remove warning: $e');
+      }
+      sqlWrapper.removeFromDb(widget.data[index]!.products.first.id!);
       widget.data.removeAt(index);
       if (widget.data.isEmpty) {
         widget.notifyParent();

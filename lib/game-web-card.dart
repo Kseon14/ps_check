@@ -1,3 +1,5 @@
+import 'dart:collection';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
@@ -108,17 +110,24 @@ class _WebViewContainerState extends State<WebViewContainer> {
                   onConsoleMessage: (controller, consoleMessage) {
                     debugPrint("Console Message: ${consoleMessage.message}");
                   },
-                  onLoadStop: (InAppWebViewController controller, Uri? url) async {
-                    if (url != null && url.toString().contains("/**/error")) {
-                      controller.reload();
-                    }
-                    await controller.evaluateJavascript(source: """
-                  document.getElementById('sony-bar').style.display = 'none';
-                  document.getElementById('shared-nav-root').style.display = 'none';
-                  var footer = document.getElementsByTagName('footer')[0];
-                  footer.parentNode.removeChild(footer);
-                """);
-                  },
+                  initialUserScripts: UnmodifiableListView<UserScript>([
+                    UserScript(
+                      source: """
+      const hide = \`
+        #sony-bar,
+        #shared-nav-root,
+        footer,
+        #jetstream-tertiary-nav { 
+          display: none !important; 
+        }
+      \`;
+      const s = document.createElement('style');
+      s.textContent = hide;
+      document.documentElement.appendChild(s);
+    """,
+                      injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                    ),
+                  ]),
                 ),
               ),
             )

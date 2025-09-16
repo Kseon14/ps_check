@@ -18,11 +18,14 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: "^3.7.2"
+  sdk: "^3.9.0"
 
 dependencies:
+  sqflite: ^2.3.3
+  path: ^1.9.0
+  path_provider: ^2.1.4
   http: ^1.2.1
-  flutter_inappwebview: ^6.0.0
+  flutter_inappwebview: ^6.1.5
   shared_preferences: ^2.0.8
   html: ^0.15.3
   hive: ^2.2.3
@@ -30,10 +33,10 @@ dependencies:
   uuid: ^4.0.0
   async: ^2.12.0
   #firebase_messaging: 10.0.7
-  workmanager: ^0.5.1
+  workmanager: ^0.9.0+2
   flutter_local_notifications: ^19.0.0
-  firebase_core: ^3.12.1
-  firebase_messaging: ^15.2.4
+  firebase_core: ^4.0.0
+  firebase_messaging: ^16.0.0
   auto_size_text: ^3.0.0-nullsafety.0
   loading_animation_widget: ^1.2.1
   url_launcher: ^6.3.0
@@ -90,14 +93,14 @@ dependencies:
 
 dev_dependencies:
   hive_generator: ^2.0.0
-  build_runner: ^2.4.4
+  build_runner: ^2.4.13
   #provider: ^6.0.1
   flutter_test:
     sdk: flutter
-  flutter_launcher_icons: 0.14.3
+  flutter_launcher_icons: 0.14.4
 
-dependency_overrides:
-  web: 1.0.0
+#dependency_overrides:
+#  web: 1.1.1
 
 
 #  objectbox_generator: ^1.2.0

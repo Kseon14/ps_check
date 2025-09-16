@@ -119,7 +119,12 @@ class HiveWrapper{
       List<GameAttributes> values = await readFromDb();
       GameAttributes? item = values.firstWhereOrNull((gm) =>
       gm.gameId == id);
-      item!.delete();
+      try {
+        item!.delete();
+      } catch (e) {
+        debugPrint('hive remove warning: $e');
+      }
+
     });
   }
 

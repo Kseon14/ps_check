@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:ui' as ui;
 import 'dart:ui';
@@ -14,6 +15,7 @@ import 'package:loading_animation_widget/loading_animation_widget.dart';
 import 'package:ps_check/bottomModalSize.dart';
 import 'package:ps_check/ga.dart';
 import 'package:ps_check/spw.dart';
+import 'package:ps_check/sql_light_wrapper.dart';
 import 'package:ps_check/tutorialManager.dart';
 import 'package:html/dom.dart' as dom;
 
@@ -26,6 +28,7 @@ import 'model.dart';
 double iconSize = 27;
 var buttonColor = Colors.black;
 var hiveWrapper = HiveWrapper.instance();
+final sqlWrapper = SqlWrapper.instance();
 var sharedPropWrapper = SharedPropWrapper.instance();
 String searchText = "";
 
@@ -60,7 +63,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
   Future<GameAttributes> saveInDb(Future<dynamic> gameAttributes) async {
     GameAttributes gm = await gameAttributes;
     //showSaveDialog(context);
-    await hiveWrapper.putIfNotExist(gm);
+    await sqlWrapper.putIfNotExist(gm);
     _showToast(Icons.save, Color(0xC4000000).withOpacity(0.93));
     return gm;
   }
@@ -97,7 +100,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
   void initState() {
     super.initState();
     _startTutorial();
-    deleteAllCookies();
+   // deleteAllCookies();
     fToast = FToast();
     fToast.init(context);
   }
@@ -257,7 +260,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
                                     onWebViewCreated:
                                         (InAppWebViewController controller) {
                                       webView = controller;
-                                      webView.clearCache();
+                                     // webView.clearCache();
                                       setCookie2();
                                     },
                                     onLoadStart: (controller, uri) {
@@ -276,15 +279,19 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
                                         this.progress = progress / 100;
                                       });
                                     },
-                                    onLoadStop: (controller, url) async {
-                                      await controller
-                                          .evaluateJavascript(source: """
-                  document.getElementById('sony-bar').style.display = 'none';
-                  document.getElementById('shared-nav-root').style.display = 'none';
-                  var footer = document.getElementsByTagName('footer')[0];
-                  footer.parentNode.removeChild(footer);
-                """);
-                                    },
+                                    initialUserScripts: UnmodifiableListView<UserScript>([
+                                      UserScript(
+                                        source: """
+      const hide = \`
+        #sony-bar, #shared-nav-root, footer { display: none !important; }
+      \`;
+      const s = document.createElement('style');
+      s.textContent = hide;
+      document.documentElement.appendChild(s);
+    """,
+                                        injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
+                                      ),
+                                    ]),
                                   ),
                                 ),
                               ),
@@ -304,7 +311,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
       url: WebUri('https://store.playstation.com'),
       name: "_evidon_consent_cookie",
       value: "date",
-      expiresDate: DateTime.now().add(Duration(days: 5)).microsecondsSinceEpoch,
+      expiresDate: DateTime.now().add(Duration(days: 5)).millisecondsSinceEpoch,
       isSecure: true,
     );
   }
@@ -343,7 +350,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
     }
 
     for (final product in products) {
-      if (await hiveWrapper.getByIdFromDb(product.id) != null) {
+      if (await sqlWrapper.getByIdFromDb(product.id) != null) {
         product.isSelected = true;
       }
     }
@@ -609,7 +616,7 @@ class _GameBrowsingScreenState extends State<GameBrowsingScreen> {
           return GestureDetector(
               onTap: () async {
                 if (products[index].isSelected!) {
-                  await hiveWrapper.removeFromDb(products[index].id!);
+                  await sqlWrapper.removeFromDb(products[index].id!);
                 } else {
                   await saveInDb(
                       _prepareAttributesFromProduct(products[index]));
